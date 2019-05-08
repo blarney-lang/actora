@@ -353,4 +353,9 @@ compile decls =
 
     -- Compile a program
     prog :: Fresh [Instr]
-    prog = concat <$> mapM fun (toList eqnMap)
+    prog = do 
+      is <- concat <$> mapM fun (toList eqnMap)
+      return $ is
+            ++ [LABEL "$bindFail"]
+            ++ [LABEL "$caseFail"]
+            ++ [LABEL "$eqnFail"]

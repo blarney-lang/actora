@@ -1,5 +1,8 @@
 module Bytecode where
 
+import Data.Map as M
+import Data.List as L
+
 -- Some meaningful type names, for readability
 type Arity = Int
 type StackOffset = Int
@@ -54,3 +57,32 @@ data BranchCond =
   | IsNotTuple
   | IsLoadFailure
   deriving (Eq, Ord, Show)
+
+-- Replace labels with addresses
+link :: [Instr] -> [Instr]
+link instrs = L.map replace (dropLabels instrs)
+  where
+    -- Compute mapping from labels to addresses
+    compute i [] = []
+    compute i (LABEL s:rest) = (s, InstrAddr i) : compute i rest
+    compute i (instr:rest) = compute (i+1) rest
+
+    -- Mapping from labels to addresses
+    toAddr = M.fromList (compute 0 instrs)
+
+    -- Determine address for given label
+    resolve s =
+      case M.lookup s toAddr of
+        Nothing -> error ("link: unknown label " ++ s)
+        Just addr -> addr
+
+    -- Drop all labels
+    dropLabels [] = []
+    dropLabels (LABEL s:rest) = dropLabels rest
+    dropLabels (i:is) = i : dropLabels is
+
+    -- Replace labels with addresses
+    replace (PUSH_RET (InstrLabel s)) = PUSH_RET (resolve s)
+    replace (JUMP (InstrLabel s)) = JUMP (resolve s)
+    replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)
+    replace other = other
