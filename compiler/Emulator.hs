@@ -39,6 +39,7 @@ data Flags =
     -- Application has terminated
   , flagHalt       :: Bool
   }
+  deriving Show
 
 -- Program counter
 type PC = Int
@@ -115,14 +116,14 @@ step (pc, i, h, s, r, fs) =
       where
         top:_ = s
         (slen, _):_ = r
-        args = L.length s - slen
+        len = L.length s - slen
         isPtrApp = case top of {PTR PtrApp _ -> True; other -> False}
-        isFun  = case top of {FUN _ _ -> True; other -> False}
+        isFun0 = case top of {FUN _ n -> n == 0; other -> False}
         fs' = fs {
           flagApplyPtr = isPtrApp
-        , flagApplyDone = not isPtrApp && not isFun && slen == 0
-        , flagApplyOk = case top of {FUN f n -> slen > n; other -> False}
-        , flagApplyUnder = case top of {FUN f n -> slen <= n; other -> False}
+        , flagApplyDone = not isPtrApp && not isFun0 && len == 1
+        , flagApplyOk = case top of {FUN f n -> len > n; other -> False}
+        , flagApplyUnder = case top of {FUN f n -> len <= n; other -> False}
         }
     -- Halt
     HALT -> (pc, i, h, s, r, fs { flagHalt = True })
