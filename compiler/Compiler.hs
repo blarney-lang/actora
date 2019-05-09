@@ -134,8 +134,7 @@ compile decls =
       | n <= length es = do
           is <- expList env es
           ret <- fresh
-          let retLabel = InstrLabel ret
-          return (is ++ [CALL (InstrLabel f) (length es), LABEL ret])
+          return (is ++ [CALL (InstrLabel f) (length es)])
     -- Partial application of known function
     exp env (Apply (Fun f n) es)
       | length es < n = do

@@ -90,6 +90,7 @@ link instrs = L.map replace (dropLabels instrs)
     dropLabels (i:is) = i : dropLabels is
 
     -- Replace labels with addresses
+    replace (PUSH (FUN (InstrLabel s) n)) = PUSH (FUN (resolve s) n)
     replace (PUSH_RET (InstrLabel s)) = PUSH_RET (resolve s)
     replace (CALL (InstrLabel s) n) = CALL (resolve s) n
     replace (SLIDE_JUMP n (InstrLabel s)) = SLIDE_JUMP n (resolve s)

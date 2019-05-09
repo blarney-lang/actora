@@ -94,7 +94,7 @@ step (pc, i, h, s, r, fs) =
                 Just m -> m
         p = S.length h
     -- Conditional branch
-    BRANCH op pop (InstrAddr a) -> (pc', i, h, s, r, fs)
+    BRANCH op pop (InstrAddr a) -> (pc', i, h, s', r, fs)
       where
         top:rest = s
         pc' = if cond then a else pc+1
