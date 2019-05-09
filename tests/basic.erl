@@ -51,3 +51,5 @@ zipWith(F, Xs, Ys) ->
 filter(P,[]) -> [];
 filter(P,[H|T]) when P(H) -> [H|filter(P,T)];
 filter(P,[H|T]) -> filter(P,T).
+
+start() -> 42.

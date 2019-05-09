@@ -2,6 +2,7 @@ import Syntax
 import Parser
 import Compiler
 import Bytecode
+import Emulator
 import System.Environment
 
 main :: IO ()

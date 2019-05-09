@@ -125,29 +125,28 @@ compile decls =
     -- Lists and tuples
     exp env (Cons e0 e1) = do
       is <- expList env [e0, e1]
-      return (is ++ [STORE 2 PtrCons])
+      return (is ++ [STORE (Just 2) PtrCons])
     exp env (Tuple es) = do
       is <- expList env es
-      return (is ++ [STORE (length es) PtrTuple])
+      return (is ++ [STORE (Just (length es)) PtrTuple])
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n <= length es = do
           is <- expList env es
           ret <- fresh
           let retLabel = InstrLabel ret
-          return ([PUSH_RET retLabel] ++ is ++
-                    [JUMP (InstrLabel f), LABEL ret])
+          return (is ++ [CALL (InstrLabel f) (length es), LABEL ret])
     -- Partial application of known function
     exp env (Apply (Fun f n) es)
       | length es < n = do
-          is <- expList env es
-          return (is ++ [PUSH (FUN (InstrLabel f) n),
-                         STORE (1 + length es) PtrApp])
+          is <- expList env (Fun f n : es)
+          return (is ++ [STORE (Just (1 + length es)) PtrApp])
     -- Application of unknown function
     exp env (Apply f es) = do
       is <- expList env (f:es)
       ret <- fresh
-      return ([PUSH_RET (InstrLabel ret)] ++ is ++ [EVAL, LABEL ret])
+      return ([PUSH_RET (InstrLabel ret)] ++ is ++
+                [JUMP (InstrLabel "$apply"), LABEL ret])
     -- Conditional expression
     exp env (Cond c e0 e1) = do
       elseLabel <- fresh
@@ -168,7 +167,7 @@ compile decls =
         is <- exp env e
         iss <- mapM (caseAlt endLabel) alts
         return (is ++ concat iss ++
-                  [JUMP (InstrLabel "$caseFail"), LABEL endLabel])
+                  [JUMP (InstrLabel "$case_fail"), LABEL endLabel])
       where
         -- Compile case alternative, where subject is on top of stack
         caseAlt endLabel (p, g, body) = do
@@ -224,7 +223,7 @@ compile decls =
       error ("Pattern contains function identifier " ++ f)
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH IsNotCons (scopeSize env0) fail, LOAD 2 ]
+      let is1 = [ BRANCH IsNotCons (scopeSize env0) fail, LOAD (Just 2) ]
       v0 <- fresh
       v1 <- fresh
       (is2, env1) <- match (push env0 [v0, v1]) v0 p0 fail
@@ -234,7 +233,7 @@ compile decls =
       let n = length ps
       let (is0, env0) = copy env v
       let is1 = [ BRANCH IsNotTuple (scopeSize env0) fail
-                , LOAD n
+                , LOAD (Just n)
                 , BRANCH IsLoadFailure (scopeSize env0) fail ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
@@ -249,23 +248,23 @@ compile decls =
       return [RETURN (stackSize env)]
     -- Return from case alternative
     seq env [] (Just label) =
-      return [SLIDE (scopeSize env) (InstrLabel label)]
+      return [SLIDE_JUMP (scopeSize env) (InstrLabel label)]
     -- Pattern bindings
     seq env (Bind p e : rest) k = do
       v <- fresh
       is0 <- exp env e
-      (is1, env1) <- match (push env [v]) v p (InstrLabel "$bindFail")
+      (is1, env1) <- match (push env [v]) v p (InstrLabel "$bind_fail")
       is2 <- seq env1 rest k
       return (is0 ++ is1 ++ is2)
-    -- Tail call
-    seq env [Apply f es] k = do
-      is <- expList env (f:es)
-      -- Write application to heap, then slide
-      return $ is
-            ++ [STORE (1 + length es) PtrApp]
-            ++ case k of
-                 Nothing -> [RETURN (stackSize env)]
-                 Just label -> [SLIDE (scopeSize env) (InstrLabel label)]
+    -- Tail call (TODO: reclaim heap space)
+    seq env [Apply (Fun f n) es] Nothing
+      | n == length es = do
+          is <- expList env es
+          return $ is
+                ++ [STORE (Just n) PtrTuple]
+                ++ [SLIDE (1 + stackSize env)]
+                ++ [LOAD Nothing]
+                ++ [JUMP (InstrLabel f)]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
@@ -282,7 +281,7 @@ compile decls =
     seq env [Case e alts] k = do
         is <- exp env e
         iss <- mapM caseAlt alts
-        return (is ++ concat iss ++ [JUMP (InstrLabel "$caseFail")])
+        return (is ++ concat iss ++ [JUMP (InstrLabel "$case_fail")])
       where
         -- Compile case alternative, where subject is on top of stack
         caseAlt (p, g, body) = do
@@ -307,7 +306,7 @@ compile decls =
     fun (f, eqns) = do
         is <- concat <$> mapM one eqns
         return ([LABEL f] ++ is ++
-                  [JUMP (InstrLabel "$eqnFail") | not exhaustive])
+                  [JUMP (InstrLabel "$eqn_fail") | not exhaustive])
       where
         -- Compile one equation
         one :: ([Exp], Guard, [Exp]) -> Fresh [Instr]
@@ -355,7 +354,32 @@ compile decls =
     prog :: Fresh [Instr]
     prog = do 
       is <- concat <$> mapM fun (toList eqnMap)
-      return $ is
-            ++ [LABEL "$bindFail"]
-            ++ [LABEL "$caseFail"]
-            ++ [LABEL "$eqnFail"]
+      return $ [CALL (InstrLabel "start") 0]
+            ++ [HALT]
+            ++ builtinApply
+            ++ is
+            ++ [LABEL "$bind_fail"]
+            ++ [LABEL "$case_fail"]
+            ++ [LABEL "$eqn_fail"]
+            ++ [LABEL "$apply_fail"]
+
+    -- To implement curried function application
+    builtinApply :: [Instr]
+    builtinApply =
+      [ LABEL "$apply"
+      ,   CAN_APPLY
+      ,   BRANCH IsNotApplyPtr 0 (InstrLabel "$apply_done")
+      ,   LOAD Nothing
+      ,   JUMP (InstrLabel "$apply")
+      , LABEL "$apply_done"
+      ,   BRANCH IsNotApplyDone 0 (InstrLabel "$apply_ok")
+      ,   RETURN 1
+      , LABEL "$apply_ok"
+      ,   BRANCH IsNotApplyOk 0 (InstrLabel "$apply_too_few")
+      ,   ICALL
+      ,   JUMP (InstrLabel "$apply")
+      , LABEL "$apply_too_few"
+      ,   BRANCH IsNotApplyUnder 0 (InstrLabel "$apply_fail")
+      ,   STORE Nothing PtrApp
+      ,   RETURN 1
+      ]

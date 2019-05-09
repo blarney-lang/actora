@@ -38,15 +38,19 @@ data Instr =
     LABEL String
   | PUSH Atom
   | PUSH_RET InstrPtr
+  | SLIDE PopAmount
+  | CALL InstrPtr Arity
+  | ICALL
   | COPY StackOffset
   | JUMP InstrPtr
-  | SLIDE PopAmount InstrPtr
+  | SLIDE_JUMP PopAmount InstrPtr
   | RETURN PopAmount
-  | EVAL
-  | LOAD NumAtoms
-  | STORE NumAtoms PtrKind
+  | LOAD (Maybe NumAtoms)
+  | STORE (Maybe NumAtoms) PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
+  | CAN_APPLY
   | PRIM Prim
+  | HALT
   deriving Show
 
 -- Branch conditions
@@ -56,6 +60,10 @@ data BranchCond =
   | IsNotCons
   | IsNotTuple
   | IsLoadFailure
+  | IsNotApplyPtr
+  | IsNotApplyDone
+  | IsNotApplyOk
+  | IsNotApplyUnder
   deriving (Eq, Ord, Show)
 
 -- Replace labels with addresses
@@ -83,6 +91,8 @@ link instrs = L.map replace (dropLabels instrs)
 
     -- Replace labels with addresses
     replace (PUSH_RET (InstrLabel s)) = PUSH_RET (resolve s)
+    replace (CALL (InstrLabel s) n) = CALL (resolve s) n
+    replace (SLIDE_JUMP n (InstrLabel s)) = SLIDE_JUMP n (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
     replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)
     replace other = other
