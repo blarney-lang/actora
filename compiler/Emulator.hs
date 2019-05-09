@@ -75,7 +75,7 @@ step (pc, i, h, s, r, fs) =
     -- Return
     RETURN pop ->
       let (sp, a):rest = r in
-        (a, i, h, head s : L.drop pop s, r, fs)
+        (a, i, h, head s : L.drop pop s, rest, fs)
     -- Load construction from the heap onto the stack
     LOAD n -> (pc+1, i, h, s', r, fs')
       where
@@ -103,8 +103,8 @@ step (pc, i, h, s, r, fs) =
           case op of
             IsNotAtom str -> top /= ATOM str
             IsNotInt i -> top /= INT i
-            IsNotCons -> case top of {PTR PtrCons _ -> True; other -> False}
-            IsNotTuple -> case top of {PTR PtrTuple _ -> True; other -> False}
+            IsNotCons -> case top of {PTR PtrCons _ -> False; other -> True}
+            IsNotTuple -> case top of {PTR PtrTuple _ -> False; other -> True}
             IsLoadFailure -> flagLoadFail fs
             IsNotApplyPtr -> not (flagApplyPtr fs)
             IsNotApplyDone -> not (flagApplyDone fs)
