@@ -17,6 +17,7 @@ data Exp =
   | Case Exp [(Exp, Guard, [Exp])]
   | If [(Exp, [Exp])]
   | Cond Exp [Exp] [Exp]
+  | Lambda [([Exp], Guard, [Exp])]
   | Int Integer
   | List [Exp]
   | Cons Exp Exp
@@ -41,6 +42,9 @@ instance Descend Exp where
     sequence [ (,) <$> f c <*> mapM f es | (c, es) <- alts ]
   descendM f (Cond cond es0 es1) =
     Cond <$> f cond <*> mapM f es0 <*> mapM f es1
+  descendM f (Lambda eqns) = Lambda <$>
+    sequence [ (,,) <$> mapM f ps <*> mapM f g <*> mapM f rhs
+             | (ps, g, rhs) <- eqns ]
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)
   descendM f (Fun g n) = return (Fun g n)

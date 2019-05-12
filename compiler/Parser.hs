@@ -19,7 +19,7 @@ tokenParser = T.makeTokenParser $ emptyDef
   , identLetter      = alphaNum
   , opStart          = opLetter haskellStyle
   , opLetter         = oneOf "+-*/=<>:|@^~?!"
-  , reservedNames    = ["case", "of", "end", "when", "if"]
+  , reservedNames    = ["case", "of", "end", "when", "if", "fun"]
   , caseSensitive    = True
   }
   
@@ -99,6 +99,7 @@ expr1 = caseExpr
     <|> list expr
     <|> pure Int <*> integer
     <|> pure Tuple <*> braces (sepBy expr comma)
+    <|> lambda
     <|> parens expr
 
 -- Pattern binding
@@ -157,6 +158,21 @@ ifAlt = do
 -- Sequence of expressions
 exprSeq :: Parser [Exp]
 exprSeq = sepBy1 expr comma
+
+-- Lambda expression
+lambda :: Parser Exp
+lambda = do
+    reserved "fun"
+    eqns <- sepBy1 eqn semi
+    reserved "end"
+    return (Lambda eqns)
+  where
+    eqn = do
+      args <- parens (sepBy ugpat comma)
+      g <- optionMaybe (reserved "when" *> expr)
+      reservedOp "->"
+      body <- exprSeq
+      return (args, g, body)
 
 -- Declarations
 decl :: Parser Decl

@@ -4,3 +4,4 @@ rc: *.hs
 .PHONY: clean
 clean:
 	rm -f *.o *.hi elite
+	rm -f Monad/*.o Monad/*.hi

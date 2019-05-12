@@ -1,14 +1,14 @@
 module Compiler where
 
 import Syntax
-import Monads
 import Descend
 import Bytecode
 import Data.Char
-import Prelude as P
-import Data.Map as M
+import Data.List
+import Monad.Fresh
 import Control.Monad
-import Data.List as L
+import qualified Data.Map as M
+import qualified Monad.WriterFresh as WF
 
 -- Preprocessing
 -- =============
@@ -25,7 +25,7 @@ desugarList = onExp list
 removeId :: [Decl] -> [Decl]
 removeId ds = onExp rem ds
   where
-    funs = P.foldr ins M.empty [(f, P.length args) | (f, args, g, rhs) <- ds]
+    funs = foldr ins M.empty [(f, length args) | (f, args, g, rhs) <- ds]
     ins (f, n) m =
       case M.lookup f m of
         Nothing -> M.insert f n m
@@ -49,9 +49,47 @@ removeIf ds = onExp rem ds
 
     toCond [] = Apply (Fun "$ifFail" 0) []
     toCond [(cond, rhs0), (Atom "true", rhs1)] =
-      Cond (rem cond) (P.map rem rhs0) (P.map rem rhs1)
+      Cond (rem cond) (map rem rhs0) (map rem rhs1)
     toCond ((cond, rhs):alts) = 
-      Cond (rem cond) (P.map rem rhs) [toCond alts]
+      Cond (rem cond) (map rem rhs) [toCond alts]
+
+-- Extract free variables from an expression
+free :: Exp -> [Id]
+free (Case e alts) = free e `union` foldr union []
+  [ (maybe [] free g `union` freeSeq es) \\ free p
+  | (p, g, es) <- alts ]
+free (Lambda eqns) = foldr union []
+  [ (maybe [] free g `union` freeSeq es) \\
+      foldr union [] (map free ps)
+  | (ps, g, es) <- eqns ]
+free (Bind p e) = free e
+free (Var v) = [v]
+free e = extract free e
+
+-- Extract free variables from an expression sequence
+freeSeq :: [Exp] -> [Id]
+freeSeq [] = []
+freeSeq (Bind p e : es) = free e `union` (freeSeq es \\ free p)
+freeSeq (e : es) = free e `union` freeSeq es
+
+-- Replace lambda expressions with applications of top-level functions
+lambdaLift :: [Decl] -> [Decl]
+lambdaLift ds = ds' ++ new
+  where
+    (_, new, ds') = WF.runWF (mapM liftDecl ds) "\\" 0
+
+    liftDecl :: Decl -> WF.WriterFresh Decl Decl
+    liftDecl (f, ps, g, rhs) = do
+      rhs' <- mapM (bottomupM lift) rhs
+      return  (f, ps, g, rhs')
+
+    lift :: Exp -> WF.WriterFresh Decl Exp
+    lift (Lambda eqns) = do
+        f <- WF.fresh
+        let vs = map Id (free (Lambda eqns))
+        WF.writeMany [(f, vs ++ ps, g, body) | (ps, g, body) <- eqns]
+        return (Apply (Id f) vs)
+    lift e = return e
 
 -- Stack environment
 -- =================
@@ -65,14 +103,14 @@ type Env = [[Id]]
 newScope :: Env -> Env
 newScope env = []:env
 
--- Push variable onto stack
+-- Push variables onto stack
 push :: Env -> [Id] -> Env
 push (s:ss) ids = (ids ++ s):ss
 
 -- Determine stack offset of given variable
 get :: Env -> Id -> Int
 get env id =
-  case L.elemIndex id (concat env) of
+  case elemIndex id (concat env) of
     Nothing -> error ("Unbound variable " ++ id)
     Just i -> i
 
@@ -109,7 +147,7 @@ compile decls =
     snd $ runFresh prog "@" 0
   where
     -- Pre-processing
-    decls' = removeIf $ removeId $ desugarList decls
+    decls' = removeId $ lambdaLift $ removeIf $ removeId $ desugarList decls
 
     -- Compile an expression
     exp :: Env -> Exp -> Fresh [Instr]
@@ -352,7 +390,7 @@ compile decls =
     -- Compile a program
     prog :: Fresh [Instr]
     prog = do 
-      is <- concat <$> mapM fun (toList eqnMap)
+      is <- concat <$> mapM fun (M.toList eqnMap)
       return $ [CALL (InstrLabel "start") 0]
             ++ [HALT]
             ++ builtinApply
