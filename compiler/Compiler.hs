@@ -213,20 +213,22 @@ compile decls =
            let failLabel = InstrLabel fail
            let env0 = newScope (push env [subjId])
            (is0, env1) <- match env0 subjId p failLabel
-           is1 <- guard env1 g failLabel
-           let env2 = push (newScope env) (head env1 ++ [subjId])
-           is2 <- seq env2 body (Just endLabel)
+           (is1, env2) <- guard env1 g failLabel
+           let env3 = push (newScope env) (head env2 ++ [subjId])
+           is2 <- seq env3 body (Just endLabel)
            return (is0 ++ is1 ++ is2 ++ [LABEL fail])
 
     -- Compile pattern guard
-    guard :: Env -> Guard -> InstrPtr -> Fresh [Instr]
+    guard :: Env -> Guard -> InstrPtr -> Fresh ([Instr], Env)
     guard env g failLabel =
       case g of
-        Nothing -> return []
+        Nothing -> return ([], env)
         Just cond -> do
           is <- exp env cond
-          return $ is
-                ++ [BRANCH (IsNotAtom "true") (scopeSize env) failLabel]
+          let env0 = push env [anon]
+          let instrs = is ++
+                [BRANCH (IsNotAtom "true") (scopeSize env0) failLabel]
+          return (instrs, env0)
 
     -- Evalute a list of expressions (each result is pushed onto the stack)
     expList :: Env -> [Exp] -> Fresh [Instr]
@@ -327,9 +329,9 @@ compile decls =
            let failLabel = InstrLabel fail
            let env0 = newScope (push env [subjId])
            (is0, env1) <- match env0 subjId p failLabel
-           is1 <- guard env1 g failLabel
-           let env2 = push env (head env1 ++ [subjId])
-           is2 <- seq env2 body k
+           (is1, env2) <- guard env1 g failLabel
+           let env3 = push env (head env2 ++ [subjId])
+           is2 <- seq env3 body k
            return (is0 ++ is1 ++ is2 ++ [LABEL fail])
     -- Other
     seq env (e : rest) k = do
@@ -358,8 +360,8 @@ compile decls =
               case g of
                 Nothing -> seq env rhs Nothing
                 Just cond -> do
-                  is0 <- guard env g fail
-                  is1 <- seq env rhs Nothing
+                  (is0, env0) <- guard env g fail
+                  is1 <- seq env0 rhs Nothing
                   return (is0 ++ is1)
             matcher env ((v, p):rest) fail = do
               (is0, env0) <- match env v p fail
