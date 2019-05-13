@@ -11,5 +11,5 @@ main = do
   case args of
     [filename] -> do
       prog <- parseFile filename
-      mapM_ print (compile prog)
+      putStrLn (run (compile prog))
     other -> putStrLn "Usage: elite <FILE>"
