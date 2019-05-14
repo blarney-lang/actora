@@ -125,6 +125,20 @@ step (pc, i, h, s, r, fs) =
         , flagApplyOk = case top of {FUN f n -> len > n; other -> False}
         , flagApplyUnder = case top of {FUN f n -> len <= n; other -> False}
         }
+    -- Primitive
+    PRIM prim -> (pc+1, i, h, res : L.drop n s, r, fs)
+      where
+        INT x = s !! 0
+        INT y = s !! 1
+        (n, res) =
+          case prim of
+            PrimAdd -> (2, INT (x+y))
+            PrimSub -> (2, INT (x-y))
+            PrimEq -> (2, if x == y then ATOM "true" else ATOM "false")
+            PrimNotEq -> (2, if x /= y then ATOM "true" else ATOM "false")
+            PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
+            PrimLessEq -> (2, if x <= y then ATOM "true" else ATOM "false")
+      
     -- Halt
     HALT -> (pc, i, h, s, r, fs { flagHalt = True })
 

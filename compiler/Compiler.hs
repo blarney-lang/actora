@@ -167,11 +167,19 @@ compile decls =
     exp env (Tuple es) = do
       is <- expList env es
       return (is ++ [STORE (Just (length es)) PtrTuple])
+    -- Application of primitive function
+    exp env (Apply (Fun "+" n) [e0, e1]) = prim env PrimAdd [e0, e1]
+    exp env (Apply (Fun "-" n) [e0, e1]) = prim env PrimSub [e0, e1]
+    exp env (Apply (Fun "==" n) [e0, e1]) = prim env PrimEq [e0, e1]
+    exp env (Apply (Fun "/=" n) [e0, e1]) = prim env PrimNotEq [e0, e1]
+    exp env (Apply (Fun "<" n) [e0, e1]) = prim env PrimLess [e0, e1]
+    exp env (Apply (Fun "<=" n) [e0, e1]) = prim env PrimLessEq [e0, e1]
+    exp env (Apply (Fun ">" n) [e0, e1]) = prim env PrimLess [e1, e0]
+    exp env (Apply (Fun ">=" n) [e0, e1]) = prim env PrimLessEq [e1, e0]
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n <= length es = do
           is <- expList env es
-          ret <- fresh
           return (is ++ [CALL (InstrLabel f) (length es)])
     -- Partial application of known function
     exp env (Apply (Fun f n) es)
@@ -238,6 +246,12 @@ compile decls =
       iss <- zipWithM (\e ws -> exp (push env ws) e) (reverse es) (inits vs)
       return (concat iss)
 
+    -- Primitive application
+    prim :: Env -> Prim -> [Exp] -> Fresh [Instr]
+    prim env p es = do
+      is <- expList env es
+      return (is ++ [PRIM p])
+
     -- Copy given variable to top of stack
     copy :: Env -> Id -> ([Instr], Env)
     copy env v = if i == 0 then ([], env) else ([COPY i], push env [v])
@@ -297,7 +311,7 @@ compile decls =
       return (is0 ++ is1 ++ is2)
     -- Tail call (TODO: reclaim heap space)
     seq env [Apply (Fun f n) es] Nothing
-      | n == length es = do
+      | not (isPrim f) && n == length es = do
           is <- expList env es
           return $ is
                 ++ [STORE (Just n) PtrTuple]

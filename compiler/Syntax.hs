@@ -29,6 +29,12 @@ data Exp =
 
 type Decl = (Id, [Exp], Guard, [Exp])
 
+-- Primitives
+-- ==========
+
+isPrim :: Id -> Bool
+isPrim id = id `elem` ["+", "-", "==", "/=", "<", "<=", ">", ">="]
+
 -- Traversal
 -- =========
 
