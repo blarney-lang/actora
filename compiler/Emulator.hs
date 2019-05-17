@@ -134,11 +134,12 @@ step (pc, i, h, s, r, fs) =
           case prim of
             PrimAdd -> (2, INT (x+y))
             PrimSub -> (2, INT (x-y))
+            PrimAddImm imm -> (1, INT (x+imm))
+            PrimSubImm imm -> (1, INT (x-imm))
             PrimEq -> (2, if x == y then ATOM "true" else ATOM "false")
             PrimNotEq -> (2, if x /= y then ATOM "true" else ATOM "false")
             PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
             PrimLessEq -> (2, if x <= y then ATOM "true" else ATOM "false")
-      
     -- Halt
     HALT -> (pc, i, h, s, r, fs { flagHalt = True })
 

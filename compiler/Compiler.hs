@@ -168,6 +168,12 @@ compile decls =
       is <- expList env es
       return (is ++ [STORE (Just (length es)) PtrTuple])
     -- Application of primitive function
+    exp env (Apply (Fun "+" n) [e0, Int i]) =
+      prim env (PrimAddImm (fromInteger i)) [e0]
+    exp env (Apply (Fun "+" n) [Int i, e0]) =
+      prim env (PrimAddImm (fromInteger i)) [e0]
+    exp env (Apply (Fun "-" n) [e0, Int i]) =
+      prim env (PrimSubImm (fromInteger i)) [e0]
     exp env (Apply (Fun "+" n) [e0, e1]) = prim env PrimAdd [e0, e1]
     exp env (Apply (Fun "-" n) [e0, e1]) = prim env PrimSub [e0, e1]
     exp env (Apply (Fun "==" n) [e0, e1]) = prim env PrimEq [e0, e1]

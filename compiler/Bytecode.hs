@@ -30,7 +30,15 @@ data PtrKind = PtrApp | PtrTuple | PtrCons
   deriving (Eq, Ord, Show)
 
 -- Primitive operators
-data Prim = PrimAdd | PrimSub | PrimEq | PrimNotEq | PrimLess | PrimLessEq
+data Prim =
+    PrimAdd
+  | PrimSub
+  | PrimAddImm Int
+  | PrimSubImm Int
+  | PrimEq
+  | PrimNotEq
+  | PrimLess
+  | PrimLessEq
   deriving Show
 
 -- Instruction set
