@@ -207,7 +207,7 @@ compile decls =
       is1 <- seq env' e0 (Just endLabel)
       is2 <- seq env' e1 (Just endLabel)
       return $ is0
-            ++ [ BRANCH (IsNotAtom "true") 0 (InstrLabel elseLabel) ]
+            ++ [ BRANCH (Neg, IsAtom "true") 0 (InstrLabel elseLabel) ]
             ++ is1
             ++ [ LABEL elseLabel ]
             ++ is2
@@ -241,7 +241,7 @@ compile decls =
           is <- exp env cond
           let env0 = push env [anon]
           let instrs = is ++
-                [BRANCH (IsNotAtom "true") (scopeSize env0) failLabel]
+                [BRANCH (Neg, IsAtom "true") (scopeSize env0) failLabel]
           return (instrs, env0)
 
     -- Evalute a list of expressions (each result is pushed onto the stack)
@@ -272,17 +272,17 @@ compile decls =
       return ([], replace env v w)
     match env v (Atom a) fail = do
       let (is0, env0) = copy env v
-      let is1 = [BRANCH (IsNotAtom a) (scopeSize env0) fail]
+      let is1 = [BRANCH (Neg, IsAtom a) (scopeSize env0) fail]
       return (is0 ++ is1, env0)
     match env v (Int i) fail = do
       let (is0, env0) = copy env v
-      let is1 = [BRANCH (IsNotInt (fromInteger i)) (scopeSize env0) fail]
+      let is1 = [BRANCH (Neg, IsInt (fromInteger i)) (scopeSize env0) fail]
       return (is0 ++ is1, env0)
     match env v (Fun f n) fail =
       error ("Pattern contains function identifier " ++ f)
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH IsNotCons (scopeSize env0) fail, LOAD (Just 2) ]
+      let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail, LOAD (Just 2) ]
       v0 <- fresh
       v1 <- fresh
       (is2, env1) <- match (push env0 [v0, v1]) v0 p0 fail
@@ -291,9 +291,9 @@ compile decls =
     match env v (Tuple ps) fail = do
       let n = length ps
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH IsNotTuple (scopeSize env0) fail
+      let is1 = [ BRANCH (Neg, IsTuple) (scopeSize env0) fail
                 , LOAD (Just n)
-                , BRANCH IsLoadFailure (scopeSize env0) fail ]
+                , BRANCH (Pos, IsLoadFailure) (scopeSize env0) fail ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
                   (instrs, env') <- match env w p fail
@@ -332,7 +332,7 @@ compile decls =
       is1 <- seq env' e0 k
       is2 <- seq env' e1 k
       return $ is0
-            ++ [ BRANCH (IsNotAtom "true") 0 (InstrLabel elseLabel) ]
+            ++ [ BRANCH (Neg, IsAtom "true") 0 (InstrLabel elseLabel) ]
             ++ is1
             ++ [ LABEL elseLabel ]
             ++ is2
@@ -427,18 +427,18 @@ compile decls =
     builtinApply =
       [ LABEL "$apply"
       ,   CAN_APPLY
-      ,   BRANCH IsNotApplyPtr 0 (InstrLabel "$apply_done")
+      ,   BRANCH (Neg, IsApplyPtr) 0 (InstrLabel "$apply_done")
       ,   LOAD Nothing
       ,   JUMP (InstrLabel "$apply")
       , LABEL "$apply_done"
-      ,   BRANCH IsNotApplyDone 0 (InstrLabel "$apply_ok")
+      ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_ok")
       ,   RETURN 1
       , LABEL "$apply_ok"
-      ,   BRANCH IsNotApplyOk 0 (InstrLabel "$apply_too_few")
+      ,   BRANCH (Neg, IsApplyOk) 0 (InstrLabel "$apply_too_few")
       ,   ICALL
       ,   JUMP (InstrLabel "$apply")
       , LABEL "$apply_too_few"
-      ,   BRANCH IsNotApplyUnder 0 (InstrLabel "$apply_fail")
+      ,   BRANCH (Neg, IsApplyUnder) 0 (InstrLabel "$apply_fail")
       ,   STORE Nothing PtrApp
       ,   RETURN 1
       ]

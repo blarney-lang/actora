@@ -62,16 +62,24 @@ data Instr =
   deriving Show
 
 -- Branch conditions
-data BranchCond =
-    IsNotAtom String
-  | IsNotInt Int
-  | IsNotCons
-  | IsNotTuple
+type BranchCond = (Polarity, BCond)
+data Polarity = Pos | Neg deriving (Eq, Ord, Show)
+
+data BCond =
+    IsAtom String
+  | IsInt Int
+  | IsCons
+  | IsTuple
+  | IsEqual
+  | IsLess
+  | IsLessImm Int
+  | IsLessEq
+  | IsLessEqImm Int
   | IsLoadFailure
-  | IsNotApplyPtr
-  | IsNotApplyDone
-  | IsNotApplyOk
-  | IsNotApplyUnder
+  | IsApplyPtr
+  | IsApplyDone
+  | IsApplyOk
+  | IsApplyUnder
   deriving (Eq, Ord, Show)
 
 -- Replace labels with addresses

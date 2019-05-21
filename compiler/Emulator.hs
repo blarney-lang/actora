@@ -95,22 +95,30 @@ step (pc, i, h, s, r, fs) =
                 Just m -> m
         p = S.length h
     -- Conditional branch
-    BRANCH op pop (InstrAddr a) -> (pc', i, h, s', r, fs)
+    BRANCH (polarity, op) pop (InstrAddr a) -> (pc', i, h, s', r, fs)
       where
-        top:rest = s
-        pc' = if cond then a else pc+1
-        s' = if cond then L.drop pop s else s
+        top1 = s!!0
+        top2 = s!!1
+        getInt (INT i) = i
+        pc' = if cond' then a else pc+1
+        s' = if cond' then L.drop pop s else s
+        cond' = if polarity == Neg then not cond else cond
         cond =
           case op of
-            IsNotAtom str -> top /= ATOM str
-            IsNotInt i -> top /= INT i
-            IsNotCons -> case top of {PTR PtrCons _ -> False; other -> True}
-            IsNotTuple -> case top of {PTR PtrTuple _ -> False; other -> True}
+            IsAtom str -> top1 == ATOM str
+            IsInt i -> top1 == INT i
+            IsCons -> not $ L.null [() | PTR PtrCons _ <- [top1]]
+            IsTuple -> not $ L.null [() | PTR PtrTuple _ <- [top1]]
+            IsEqual -> top1 == top2
+            IsLess -> getInt top1 < getInt top2
+            IsLessImm i -> getInt top1 < i
+            IsLessEq -> getInt top1 <= getInt top2
+            IsLessEqImm i -> getInt top1 <= i
             IsLoadFailure -> flagLoadFail fs
-            IsNotApplyPtr -> not (flagApplyPtr fs)
-            IsNotApplyDone -> not (flagApplyDone fs)
-            IsNotApplyOk -> not (flagApplyOk fs)
-            IsNotApplyUnder -> not (flagApplyUnder fs)
+            IsApplyPtr -> flagApplyPtr fs
+            IsApplyDone -> flagApplyDone fs
+            IsApplyOk -> flagApplyOk fs
+            IsApplyUnder -> flagApplyUnder fs
     -- Query application on the stack
     CAN_APPLY -> (pc+1, i, h, s, r, fs')
       where
