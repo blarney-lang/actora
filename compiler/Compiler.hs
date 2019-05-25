@@ -202,12 +202,11 @@ compile decls =
     exp env (Cond c e0 e1) = do
       elseLabel <- fresh
       endLabel <- fresh
-      is0 <- exp env c
+      is0 <- branchNot env c 0 (InstrLabel elseLabel)
       let env' = push (newScope env) [anon]
       is1 <- seq env' e0 (Just endLabel)
       is2 <- seq env' e1 (Just endLabel)
       return $ is0
-            ++ [ BRANCH (Neg, IsAtom "true") 0 (InstrLabel elseLabel) ]
             ++ is1
             ++ [ LABEL elseLabel ]
             ++ is2
@@ -238,11 +237,8 @@ compile decls =
       case g of
         Nothing -> return ([], env)
         Just cond -> do
-          is <- exp env cond
-          let env0 = push env [anon]
-          let instrs = is ++
-                [BRANCH (Neg, IsAtom "true") (scopeSize env0) failLabel]
-          return (instrs, env0)
+          is <- branchNot env cond (1 + scopeSize env) failLabel
+          return (is, push env [anon])
 
     -- Evalute a list of expressions (each result is pushed onto the stack)
     expList :: Env -> [Exp] -> Fresh [Instr]
@@ -257,6 +253,13 @@ compile decls =
     prim env p es = do
       is <- expList env es
       return (is ++ [PRIM p])
+
+    -- Branch if expression evaluates to false
+    -- (Leaves result of expression on stack)
+    branchNot :: Env -> Exp -> Int -> InstrPtr -> Fresh [Instr]
+    branchNot env e pop label = do
+      is <- exp env e
+      return (is ++ [BRANCH (Neg, IsAtom "true") pop label])
 
     -- Copy given variable to top of stack
     copy :: Env -> Id -> ([Instr], Env)
@@ -327,12 +330,11 @@ compile decls =
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
-      is0 <- exp env c
+      is0 <- branchNot env c 0 (InstrLabel elseLabel)
       let env' = push env [anon]
       is1 <- seq env' e0 k
       is2 <- seq env' e1 k
       return $ is0
-            ++ [ BRANCH (Neg, IsAtom "true") 0 (InstrLabel elseLabel) ]
             ++ is1
             ++ [ LABEL elseLabel ]
             ++ is2
