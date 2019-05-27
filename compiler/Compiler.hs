@@ -257,6 +257,12 @@ compile decls =
     -- Branch if expression evaluates to false
     -- (Leaves result of expression on stack)
     branchNot :: Env -> Exp -> Int -> InstrPtr -> Fresh [Instr]
+    branchNot env (Apply (Fun "==" 2) [e, Int i]) pop label = do
+      is <- exp env e
+      return (is ++ [BRANCH (Neg, IsInt (fromInteger i)) pop label])
+    branchNot env (Apply (Fun "==" 2) [e, Atom a]) pop label = do
+      is <- exp env e
+      return (is ++ [BRANCH (Neg, IsAtom a) pop label])
     branchNot env e pop label = do
       is <- exp env e
       return (is ++ [BRANCH (Neg, IsAtom "true") pop label])
@@ -310,7 +316,7 @@ compile decls =
       return [RETURN (stackSize env)]
     -- Return from case alternative
     seq env [] (Just label) =
-      return [SLIDE_JUMP (scopeSize env) (InstrLabel label)]
+      return [SLIDE_JUMP (scopeSize env) 1 (InstrLabel label)]
     -- Pattern bindings
     seq env (Bind p e : rest) k = do
       v <- fresh
@@ -318,14 +324,12 @@ compile decls =
       (is1, env1) <- match (push env [v]) v p (InstrLabel "$bind_fail")
       is2 <- seq env1 rest k
       return (is0 ++ is1 ++ is2)
-    -- Tail call (TODO: reclaim heap space)
+    -- Tail call
     seq env [Apply (Fun f n) es] Nothing
       | not (isPrim f) && n == length es = do
           is <- expList env es
           return $ is
-                ++ [STORE (Just n) PtrTuple]
-                ++ [SLIDE (1 + stackSize env)]
-                ++ [LOAD Nothing]
+                ++ [SLIDE_JUMP (1 + stackSize env) n (InstrLabel f)]
                 ++ [JUMP (InstrLabel f)]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do

@@ -57,9 +57,6 @@ step (pc, i, h, s, r, fs) =
     PUSH a -> (pc+1, i, h, a:s, r, fs)
     -- Push onto return stack
     PUSH_RET (InstrAddr a) -> (pc+1, i, h, s, (L.length s, a):r, fs)
-    -- Slide top stack element
-    SLIDE pop -> 
-      (pc+1, i, h, head s : L.drop pop s, r, fs)
     -- Function call
     CALL (InstrAddr a) n -> (a, i, h, s, (L.length s - n, pc+1):r, fs)
     -- Indirect function call
@@ -70,9 +67,9 @@ step (pc, i, h, s, r, fs) =
     COPY n -> (pc+1, i, h, (s!!n):s, r, fs)
     -- Direct unconditional jump
     JUMP (InstrAddr a) -> (a, i, h, s, r, fs)
-    -- Slide top stack element, and jump to destination
-    SLIDE_JUMP pop (InstrAddr a) -> 
-      (a, i, h, head s : L.drop pop s, r, fs)
+    -- Slide top stack elements, and jump to destination
+    SLIDE_JUMP pop n (InstrAddr a) -> 
+      (a, i, h, L.take n s ++ L.drop pop s, r, fs)
     -- Return
     RETURN pop ->
       let (sp, a):rest = r in
@@ -98,7 +95,6 @@ step (pc, i, h, s, r, fs) =
     BRANCH (polarity, op) pop (InstrAddr a) -> (pc', i, h, s', r, fs)
       where
         top1 = s!!0
-        top2 = s!!1
         getInt (INT i) = i
         pc' = if cond' then a else pc+1
         s' = if cond' then L.drop pop s else s
@@ -109,11 +105,6 @@ step (pc, i, h, s, r, fs) =
             IsInt i -> top1 == INT i
             IsCons -> not $ L.null [() | PTR PtrCons _ <- [top1]]
             IsTuple -> not $ L.null [() | PTR PtrTuple _ <- [top1]]
-            IsEqual -> top1 == top2
-            IsLess -> getInt top1 < getInt top2
-            IsLessImm i -> getInt top1 < i
-            IsLessEq -> getInt top1 <= getInt top2
-            IsLessEqImm i -> getInt top1 <= i
             IsLoadFailure -> flagLoadFail fs
             IsApplyPtr -> flagApplyPtr fs
             IsApplyDone -> flagApplyDone fs

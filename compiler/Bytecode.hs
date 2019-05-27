@@ -46,12 +46,11 @@ data Instr =
     LABEL String
   | PUSH Atom
   | PUSH_RET InstrPtr
-  | SLIDE PopAmount
   | CALL InstrPtr Arity
   | ICALL
   | COPY StackOffset
   | JUMP InstrPtr
-  | SLIDE_JUMP PopAmount InstrPtr
+  | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
   | LOAD (Maybe NumAtoms)
   | STORE (Maybe NumAtoms) PtrKind
@@ -70,11 +69,6 @@ data BCond =
   | IsInt Int
   | IsCons
   | IsTuple
-  | IsEqual
-  | IsLess
-  | IsLessImm Int
-  | IsLessEq
-  | IsLessEqImm Int
   | IsLoadFailure
   | IsApplyPtr
   | IsApplyDone
@@ -109,7 +103,7 @@ link instrs = L.map replace (dropLabels instrs)
     replace (PUSH (FUN (InstrLabel s) n)) = PUSH (FUN (resolve s) n)
     replace (PUSH_RET (InstrLabel s)) = PUSH_RET (resolve s)
     replace (CALL (InstrLabel s) n) = CALL (resolve s) n
-    replace (SLIDE_JUMP n (InstrLabel s)) = SLIDE_JUMP n (resolve s)
+    replace (SLIDE_JUMP n m (InstrLabel s)) = SLIDE_JUMP n m (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
     replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)
     replace other = other
