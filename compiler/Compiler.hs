@@ -184,15 +184,16 @@ compile decls =
     exp env (Apply (Fun ">=" n) [e0, e1]) = prim env PrimLessEq [e1, e0]
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
-      | n <= length es = do
+      | n == length es = do
           is <- expList env es
           return (is ++ [CALL (InstrLabel f) (length es)])
-    -- Partial application of known function
+    -- Under-saturated application of known function
     exp env (Apply (Fun f n) es)
       | length es < n = do
           is <- expList env (Fun f n : es)
           return (is ++ [STORE (Just (1 + length es)) PtrApp])
-    -- Application of unknown function
+    -- Over-saturated application of known function
+    -- Or application of unknown function
     exp env (Apply f es) = do
       is <- expList env (f:es)
       ret <- fresh

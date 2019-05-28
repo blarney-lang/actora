@@ -1,4 +1,6 @@
-module Emulator where
+-- Stack machine semantics
+
+module Semantics where
 
 import Bytecode
 import Data.Maybe
