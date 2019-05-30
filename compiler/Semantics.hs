@@ -71,43 +71,37 @@ step (pc, i, h, s, r, fs) =
     JUMP (InstrAddr a) -> (a, i, h, s, r, fs)
     -- Slide top stack elements, and jump to destination
     SLIDE_JUMP pop n (InstrAddr a) -> 
-      (a, i, h, L.take n s ++ L.drop pop s, r, fs)
+      (a, i, h, L.take n s ++ L.drop (n+pop) s, r, fs)
     -- Return
     RETURN pop ->
       let (sp, a):rest = r in
         (a, i, h, head s : L.drop pop s, rest, fs)
     -- Load construction from the heap onto the stack
-    LOAD n -> (pc+1, i, h, s', r, fs')
+    LOAD pop -> (pc+1, i, h, s', r, fs)
       where
-        PTR k p : rest = s
+        PTR k n p : rest = s
         Just as = h S.!? p
-        loadOk = case n of { Nothing -> True; Just m -> m == L.length as }
-        fs' = fs { flagLoadFail = not loadOk }
-        s' = if isNothing n then as ++ rest else 
-               if loadOk then as ++ s else s
+        s' = if pop then as ++ rest else as ++ s
     -- Store construction to the heap
-    STORE n k -> (pc+1, i, h |> L.take len s, PTR k p:L.drop len s, r, fs)
+    STORE n k -> (pc+1, i, h |> L.take len s, PTR k len p:L.drop len s, r, fs)
       where
         len = case n of
-                Nothing -> L.length s - slen
-                  where slen = fst (head r)
+                Nothing -> L.length s - fst (head r)
                 Just m -> m
         p = S.length h
     -- Conditional branch
     BRANCH (polarity, op) pop (InstrAddr a) -> (pc', i, h, s', r, fs)
       where
-        top1 = s!!0
-        getInt (INT i) = i
+        top = s!!0
         pc' = if cond' then a else pc+1
         s' = if cond' then L.drop pop s else s
         cond' = if polarity == Neg then not cond else cond
         cond =
           case op of
-            IsAtom str -> top1 == ATOM str
-            IsInt i -> top1 == INT i
-            IsCons -> not $ L.null [() | PTR PtrCons _ <- [top1]]
-            IsTuple -> not $ L.null [() | PTR PtrTuple _ <- [top1]]
-            IsLoadFailure -> flagLoadFail fs
+            IsAtom str -> top == ATOM str
+            IsInt i -> top == INT i
+            IsCons -> not $ L.null [() | PTR PtrCons _ _ <- [top]]
+            IsTuple n -> not $ L.null [() | PTR PtrTuple m _ <- [top], n == m]
             IsApplyPtr -> flagApplyPtr fs
             IsApplyDone -> flagApplyDone fs
             IsApplyOk -> flagApplyOk fs
@@ -118,7 +112,7 @@ step (pc, i, h, s, r, fs) =
         top:_ = s
         (slen, _):_ = r
         len = L.length s - slen
-        isPtrApp = case top of {PTR PtrApp _ -> True; other -> False}
+        isPtrApp = case top of {PTR PtrApp _ _ -> True; other -> False}
         isFun0 = case top of {FUN _ n -> n == 0; other -> False}
         fs' = fs {
           flagApplyPtr = isPtrApp
@@ -129,16 +123,21 @@ step (pc, i, h, s, r, fs) =
     -- Primitive
     PRIM prim -> (pc+1, i, h, res : L.drop n s, r, fs)
       where
-        INT x = s !! 0
-        INT y = s !! 1
+        ~(INT x) = s !! 0
+        ~(INT y) = s !! 1
+        equal (INT x) (INT y) = x == y
+        equal (ATOM x) (ATOM y) = x == y
+        equal x y = error "Equality on non-primitive type"
         (n, res) =
           case prim of
             PrimAdd -> (2, INT (x+y))
             PrimSub -> (2, INT (x-y))
             PrimAddImm imm -> (1, INT (x+imm))
             PrimSubImm imm -> (1, INT (x-imm))
-            PrimEq -> (2, if x == y then ATOM "true" else ATOM "false")
-            PrimNotEq -> (2, if x /= y then ATOM "true" else ATOM "false")
+            PrimEq -> (2, if (s!!0) `equal` (s!!1)
+                          then ATOM "true" else ATOM "false")
+            PrimNotEq -> (2, if (s!!0) `equal` (s!!1)
+                             then ATOM "false" else ATOM "true")
             PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
             PrimLessEq -> (2, if x <= y then ATOM "true" else ATOM "false")
     -- Halt
@@ -175,7 +174,7 @@ run instrs = exec initial
     render h (INT i) = show i
     render h (ATOM s) = s
     render h (FUN f n) = "FUN"
-    render h (PTR k p) =
+    render h (PTR k n p) =
       case k of
         PtrApp -> render h (head atoms) ++ "(" ++ concat (L.intersperse ", "
                     (L.map (render h) (tail atoms))) ++ ")"

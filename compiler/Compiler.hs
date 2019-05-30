@@ -292,7 +292,7 @@ compile decls =
       error ("Pattern contains function identifier " ++ f)
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail, LOAD (Just 2) ]
+      let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail, LOAD False ]
       v0 <- fresh
       v1 <- fresh
       (is2, env1) <- match (push env0 [v0, v1]) v0 p0 fail
@@ -301,9 +301,7 @@ compile decls =
     match env v (Tuple ps) fail = do
       let n = length ps
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH (Neg, IsTuple) (scopeSize env0) fail
-                , LOAD (Just n)
-                , BRANCH (Pos, IsLoadFailure) (scopeSize env0) fail ]
+      let is1 = [ BRANCH (Neg, IsTuple n) (scopeSize env0) fail, LOAD False ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
                   (instrs, env') <- match env w p fail
@@ -330,8 +328,7 @@ compile decls =
       | not (isPrim f) && n == length es = do
           is <- expList env es
           return $ is
-                ++ [SLIDE_JUMP (1 + stackSize env) n (InstrLabel f)]
-                ++ [JUMP (InstrLabel f)]
+                ++ [SLIDE_JUMP (stackSize env) n (InstrLabel f)]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
@@ -435,7 +432,7 @@ compile decls =
       [ LABEL "$apply"
       ,   CAN_APPLY
       ,   BRANCH (Neg, IsApplyPtr) 0 (InstrLabel "$apply_done")
-      ,   LOAD Nothing
+      ,   LOAD True
       ,   JUMP (InstrLabel "$apply")
       , LABEL "$apply_done"
       ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_ok")

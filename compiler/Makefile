@@ -5,3 +5,4 @@ rc: *.hs
 clean:
 	rm -f *.o *.hi elite
 	rm -f Monad/*.o Monad/*.hi
+	rm -f Backend/*.o Backend/*.hi

@@ -1,6 +1,7 @@
 module Bytecode where
 
 import Data.Map as M
+import Data.Set as S
 import Data.List as L
 
 -- Some meaningful type names, for readability
@@ -22,7 +23,7 @@ data Atom =
     FUN InstrPtr Arity
   | INT Int
   | ATOM String
-  | PTR PtrKind Int
+  | PTR PtrKind NumAtoms Int
   deriving (Eq, Ord, Show)
 
 -- Pointers can point to partial applications, tuples, and cons cells
@@ -52,7 +53,7 @@ data Instr =
   | JUMP InstrPtr
   | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
-  | LOAD (Maybe NumAtoms)
+  | LOAD Bool
   | STORE (Maybe NumAtoms) PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
   | CAN_APPLY
@@ -68,8 +69,7 @@ data BCond =
     IsAtom String
   | IsInt Int
   | IsCons
-  | IsTuple
-  | IsLoadFailure
+  | IsTuple NumAtoms
   | IsApplyPtr
   | IsApplyDone
   | IsApplyOk
@@ -107,3 +107,12 @@ link instrs = L.map replace (dropLabels instrs)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
     replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)
     replace other = other
+
+-- Determine all atoms used
+atoms :: [Instr] -> [String]
+atoms is = S.toList (S.unions (L.map get is) `S.union` reserved)
+  where
+    reserved = S.fromList ["true", "false", "[]"]
+    get (PUSH (ATOM a)) = S.singleton a
+    get (BRANCH (_, IsAtom a) _ _) = S.singleton a
+    get other = S.empty
