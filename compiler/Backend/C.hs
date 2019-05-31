@@ -42,10 +42,10 @@ gen opts = do
       [ "STACK_SIZE=100000"
       , "HEAP_SIZE=100000"
       , "main: main.c"
-      , "\tgcc -I $(ELITE_ROOT)/compiler/Backend/ \\"
-      , "      -D STACK_SIZE=$(STACK_SIZE)        \\"
-      , "      -D RET_STACK_SIZE=$(STACK_SIZE)    \\"
-      , "      -D HEAP_SIZE=$(HEAP_SIZE)          \\"
+      , "\t@gcc -I $(ELITE_ROOT)/compiler/Backend/ \\"
+      , "      -D STACK_SIZE=$(STACK_SIZE)         \\"
+      , "      -D RET_STACK_SIZE=$(STACK_SIZE)     \\"
+      , "      -D HEAP_SIZE=$(HEAP_SIZE)           \\"
       , "      -O2 main.c -o main"
       ]
 
@@ -114,7 +114,7 @@ gen opts = do
       , "    uint32_t n = ptrLen(tag);"
       , "    printf(\"{\");"
       , "    for (uint32_t i = 0; i < n; i++) {"
-      , "      render(heap_tag[val+i], heap[val+1]);"
+      , "      render(heap_tag[val+i], heap[val+i]);"
       , "      if (i < n-1) printf(\", \");"
       , "    }"
       , "    printf(\"}\");"
