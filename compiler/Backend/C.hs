@@ -1,14 +1,54 @@
 module Backend.C where
 
-import Bytecode
+-- Standard imports
 import Data.Char
+import System.Directory
+
+-- Local imports
+import Syntax
+import Bytecode
+import Compiler
 import Monad.Fresh
 
-gen :: [Instr] -> String
-gen bytecode =
-    unlines $ concat [includes, defines, typeDecls,
-                      atomNames, globals, render, main]
+-- C generator options
+data CGenOpts =
+  CGenOpts {
+    sourceProg :: [Decl]
+  , targetDir  :: String
+  }
+
+gen :: CGenOpts -> IO ()
+gen opts = do
+    createDirectory (targetDir opts)
+    writeFile (targetDir opts ++ "/main.c") ccode
+    writeFile (targetDir opts ++ "/Makefile") makefile
   where
+    bytecode :: [Instr]
+    bytecode = compile (sourceProg opts)
+
+    ccode :: String
+    ccode = unlines $ concat
+      [ includes
+      , defines
+      , typeDecls
+      , atomNames
+      , globals
+      , render
+      , main
+      ]
+
+    makefile :: String
+    makefile = unlines
+      [ "STACK_SIZE=100000"
+      , "HEAP_SIZE=100000"
+      , "main: main.c"
+      , "\tgcc -I $(ELITE_ROOT)/compiler/Backend/ \\"
+      , "      -D STACK_SIZE=$(STACK_SIZE)        \\"
+      , "      -D RET_STACK_SIZE=$(STACK_SIZE)    \\"
+      , "      -D HEAP_SIZE=$(HEAP_SIZE)          \\"
+      , "      -O2 main.c -o main"
+      ]
+
     mangle :: String -> String
     mangle (x:xs) = first x ++ concatMap rest xs
       where
@@ -22,7 +62,7 @@ gen bytecode =
       , "#include <stdlib.h>"
       , "#include <stdint.h>"
       , "#include <assert.h>"
-      , "#include \"elite.h\""
+      , "#include <elite.h>"
       ]
 
     defines :: [String]
