@@ -232,13 +232,10 @@ gen opts = do
         , "  }"
         , "}"
         ]
-    instr (STORE n k) =
+    instr (STORE Nothing k) =
       return
         [ "{"
-        , "  uint32_t n = " ++
-               case n of
-                 Nothing -> "sp - rp[-1].sp;"
-                 Just m -> show m ++ ";"
+        , "  uint32_t n = sp - rp[-1].sp;"
         , "  Unsigned addr = hp;"
         , "  for (uint32_t i = 0; i < n; i++) {"
         , "    heap_tag[hp] = sp[-1].tag;"
@@ -251,6 +248,21 @@ gen opts = do
         , "  sp++;"
         , "}"
         ]
+    instr (STORE (Just n) k) =
+      return $
+           [ "{"
+           , "  Unsigned addr = hp;"
+           ]
+        ++ concat [ [ "  heap_tag[hp] = sp[-1].tag;"
+                    , "  heap[hp] = sp[-1].val;"
+                    , "  hp++; sp--;"
+                    ]
+                  | i <- [1..n] ]
+        ++ [ "  sp[0].tag = makeTag(" ++ ptrKind k ++ ", " ++ show n ++ ");"
+           , "  sp[0].val = addr;"
+           , "  sp++;"
+           , "}"
+           ]
     instr (BRANCH (polarity, op) pop (InstrLabel label)) =
         return
           [ "if (" ++ cond ++ ") {"
