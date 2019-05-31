@@ -53,7 +53,7 @@ data Instr =
   | JUMP InstrPtr
   | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
-  | LOAD Bool
+  | LOAD (Maybe NumAtoms)
   | STORE (Maybe NumAtoms) PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
   | CAN_APPLY

@@ -218,13 +218,13 @@ gen opts = do
         , "rp--;"
         , "goto *(rp->ip);"
         ]
-    instr (LOAD pop) =
+    instr (LOAD Nothing) =
       return
         [ "{"
         , "  assert(isPtr(sp[-1].tag));"
         , "  uint32_t n = ptrLen(sp[-1].tag);"
         , "  Unsigned addr = sp[-1].val + n;"
-        , "  " ++ if pop then "sp--;" else ""
+        , "  sp--;"
         , "  for (uint32_t i = 1; i <= n; i++) {"
         , "    sp[0].tag = heap_tag[addr-i];"
         , "    sp[0].val = heap[addr-i];"
@@ -232,6 +232,19 @@ gen opts = do
         , "  }"
         , "}"
         ]
+    instr (LOAD (Just n)) =
+      return $
+        [ "{"
+        , "  assert(isPtr(sp[-1].tag));"
+        , "  Unsigned addr = sp[-1].val + " ++ show (n-1) ++ ";"
+        ] ++ concat
+        [ [ "  sp[0].tag = heap_tag[addr];"
+          , "  sp[0].val = heap[addr];"
+          , "  sp++; addr--;"
+          ]
+        | i <- [1..n]
+        ] ++
+        [ "}" ]
     instr (STORE Nothing k) =
       return
         [ "{"

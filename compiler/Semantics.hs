@@ -77,11 +77,14 @@ step (pc, i, h, s, r, fs) =
       let (sp, a):rest = r in
         (a, i, h, head s : L.drop pop s, rest, fs)
     -- Load construction from the heap onto the stack
-    LOAD pop -> (pc+1, i, h, s', r, fs)
+    LOAD n -> (pc+1, i, h, s', r, fs)
       where
-        PTR k n p : rest = s
+        -- The number inside n should always equal m, so isn't
+        -- really needed.  However, n is statically known, so
+        -- can allow better code gen.
+        PTR k m p : rest = s
         Just as = h S.!? p
-        s' = if pop then as ++ rest else as ++ s
+        s' = if isNothing n then as ++ rest else as ++ s
     -- Store construction to the heap
     STORE n k -> (pc+1, i, h |> L.take len s, PTR k len p:L.drop len s, r, fs)
       where
