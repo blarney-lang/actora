@@ -1,4 +1,4 @@
-module Backend.C where
+module Backend.StandardC where
 
 -- Standard imports
 import Data.Char
@@ -21,8 +21,8 @@ data CGenOpts =
 -- Word width
 data CGenMode = CGen_16 | CGen_32 | CGen_64
 
-gen :: CGenOpts -> IO ()
-gen opts = do
+genC :: CGenOpts -> IO ()
+genC opts = do
     createDirectory (targetDir opts)
     writeFile (targetDir opts ++ "/main.c") ccode
     writeFile (targetDir opts ++ "/Makefile") makefile
@@ -230,7 +230,7 @@ gen opts = do
         ]
     instr (COPY n) =
       return
-        [ "*sp++ = sp[-" ++ show (n+1) ++ "];" ]
+        [ "*sp = sp[-" ++ show (n+1) ++ "]; sp++;" ]
     instr (JUMP (InstrLabel label)) =
       return [ "goto " ++ mangle label ++ ";" ]
     instr (SLIDE_JUMP pop n (InstrLabel label)) =
@@ -250,10 +250,10 @@ gen opts = do
       return
         [ "{"
         , "  assert(isPtr(sp[-1].tag));"
-        , "  uint32_t n = ptrLen(sp[-1].tag);"
+        , "  Unsigned n = ptrLen(sp[-1].tag);"
         , "  Unsigned addr = sp[-1].val + n;"
         , "  sp--;"
-        , "  for (uint32_t i = 1; i <= n; i++) {"
+        , "  for (Unsigned i = 1; i <= n; i++) {"
         , "    sp[0] = heap[addr-i];"
         , "    sp++;"
         , "  }"
@@ -274,9 +274,9 @@ gen opts = do
     instr (STORE Nothing k) =
       return
         [ "{"
-        , "  uint32_t n = sp - rp[-1].sp;"
+        , "  Unsigned n = sp - rp[-1].sp;"
         , "  Unsigned addr = hp;"
-        , "  for (uint32_t i = 0; i < n; i++) {"
+        , "  for (Unsigned i = 0; i < n; i++) {"
         , "    heap[hp] = sp[-1];"
         , "    hp++;"
         , "    sp--;"
@@ -325,7 +325,7 @@ gen opts = do
     instr CAN_APPLY =
       return
         [ "{"
-        , "  uint32_t len = sp - rp[-1].sp;"
+        , "  Unsigned len = sp - rp[-1].sp;"
         , "  flagApplyPtr = type(sp[-1].tag) == PTR_APP;"
         , "  flagApplyDone = type(sp[-1].tag) != PTR_APP &&"
         , "                   !(type(sp[-1].tag) == FUN &&"
