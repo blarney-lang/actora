@@ -13,9 +13,13 @@ import Monad.Fresh
 -- C generator options
 data CGenOpts =
   CGenOpts {
-    sourceProg :: [Decl]
-  , targetDir  :: String
+    sourceProg   :: [Decl]
+  , targetDir    :: String
+  , genMode      :: CGenMode
   }
+
+-- Word width
+data CGenMode = CGen_16 | CGen_32 | CGen_64
 
 gen :: CGenOpts -> IO ()
 gen opts = do
@@ -31,6 +35,7 @@ gen opts = do
       [ includes
       , defines
       , typeDecls
+      , helpers
       , atomNames
       , globals
       , render
@@ -39,14 +44,13 @@ gen opts = do
 
     makefile :: String
     makefile = unlines
-      [ "STACK_SIZE=100000"
-      , "HEAP_SIZE=100000"
+      [ "STACK_SIZE ?= 32000"
+      , "HEAP_SIZE ?= 32000"
       , "main: main.c"
-      , "\t@gcc -I $(ELITE_ROOT)/compiler/Backend/ \\"
-      , "      -D STACK_SIZE=$(STACK_SIZE)         \\"
-      , "      -D RET_STACK_SIZE=$(STACK_SIZE)     \\"
-      , "      -D HEAP_SIZE=$(HEAP_SIZE)           \\"
-      , "      -O2 main.c -o main"
+      , "\t@gcc -D STACK_SIZE=$(STACK_SIZE)         \\"
+      , "       -D RET_STACK_SIZE=$(STACK_SIZE)     \\"
+      , "       -D HEAP_SIZE=$(HEAP_SIZE)           \\"
+      , "       -O3 main.c -o main"
       ]
 
     mangle :: String -> String
@@ -61,31 +65,56 @@ gen opts = do
       [ "#include <stdio.h>"
       , "#include <stdlib.h>"
       , "#include <stdint.h>"
+      , "#include <stdbool.h>"
       , "#include <assert.h>"
-      , "#include <elite.h>"
       ]
 
     defines :: [String]
     defines =
-         [ "#define LABEL_" ++ mangle label ++ " " ++ show n
+         [ "#define INLINE inline __attribute__((always_inline))"
+         , ""
+         , "#define PTR_APP   1"
+         , "#define PTR_CONS  3"
+         , "#define PTR_TUPLE 5"
+         , "#define INT       2"
+         , "#define ATOM      4"
+         , "#define FUN       6"
+         ]
+      ++ [ "#define LABEL_" ++ mangle label ++ " " ++ show n
          | (label, n) <- zip labels [0..] ]
       ++ [ "#define ATOM_" ++ mangle atom ++ " " ++ show n
          | (atom, n) <- zip (atoms bytecode) [0..] ]
       where
         labels = [label | LABEL label <- bytecode]
 
+    helpers :: [String]
+    helpers =
+      [ "INLINE Unsigned type(Unsigned t) { return t & 7; }"
+      , "INLINE Unsigned ptrLen(Unsigned t) { return t >> 3; }"
+      , "INLINE Unsigned funArity(Unsigned t) { return t >> 3; }"
+      , "INLINE bool isPtr(Unsigned t) { return t & 1; }"
+      , "INLINE Unsigned makeTag(Unsigned kind, Unsigned n)"
+      , "  { return (n << 3) | kind; }"
+      ]
+
     typeDecls :: [String]
     typeDecls =
-      [ "typedef struct { Tag tag; Unsigned val; } StackItem;"
-      , "typedef struct { StackItem* sp; void* ip; } RetItem;"
+      [ "typedef uint" ++ mode (genMode opts) ++ "_t Unsigned;"
+      , "typedef int" ++ mode (genMode opts) ++ "_t Signed;"
+      , "typedef struct { Unsigned tag; Unsigned val; } TaggedWord;"
+      , "typedef struct { TaggedWord* sp; void* ip; } RetItem;"
       ]
+
+    mode :: CGenMode -> String
+    mode (CGen_16) = "16"
+    mode (CGen_32) = "32"
+    mode (CGen_64) = "64"
 
     globals :: [String]
     globals =
-      [ "StackItem* sp;"
+      [ "TaggedWord* sp;"
       , "RetItem* rp;"
-      , "Unsigned* heap;"
-      , "Tag* heap_tag;"
+      , "TaggedWord* heap;"
       , "Unsigned hp;"
       ]
 
@@ -98,23 +127,23 @@ gen opts = do
 
     render :: [String]
     render =
-      [ "void render(Tag tag, Unsigned val) {"
-      , "  if (type(tag) == INT) printf(\"%d\", val);"
-      , "  if (type(tag) == ATOM) printf(\"%s\", atoms[val]);"
-      , "  if (type(tag) == FUN) printf(\"FUN\");"
-      , "  if (type(tag) == PTR_APP) printf(\"APP\");"
-      , "  if (type(tag) == PTR_CONS) {"
+      [ "void render(TaggedWord w) {"
+      , "  if (type(w.tag) == INT) printf(\"%d\", w.val);"
+      , "  if (type(w.tag) == ATOM) printf(\"%s\", atoms[w.val]);"
+      , "  if (type(w.tag) == FUN) printf(\"FUN\");"
+      , "  if (type(w.tag) == PTR_APP) printf(\"APP\");"
+      , "  if (type(w.tag) == PTR_CONS) {"
       , "    printf(\"[\");"
-      , "    render(heap_tag[val], heap[val]);"
+      , "    render(heap[w.val]);"
       , "    printf(\"|\");"
-      , "    render(heap_tag[val+1], heap[val+1]);"
+      , "    render(heap[w.val+1]);"
       , "    printf(\"]\");"
       , "  }"
-      , "  if (type(tag) == PTR_TUPLE) {"
-      , "    uint32_t n = ptrLen(tag);"
+      , "  if (type(w.tag) == PTR_TUPLE) {"
+      , "    Unsigned n = ptrLen(w.tag);"
       , "    printf(\"{\");"
-      , "    for (uint32_t i = 0; i < n; i++) {"
-      , "      render(heap_tag[val+i], heap[val+i]);"
+      , "    for (Unsigned i = 0; i < n; i++) {"
+      , "      render(heap[w.val+i]);"
       , "      if (i < n-1) printf(\", \");"
       , "    }"
       , "    printf(\"}\");"
@@ -125,10 +154,9 @@ gen opts = do
     main :: [String]
     main =
          [ "int main() {"
-         , "  sp = malloc(STACK_SIZE * sizeof(StackItem));"
+         , "  sp = malloc(STACK_SIZE * sizeof(TaggedWord));"
          , "  rp = malloc(RET_STACK_SIZE * sizeof(RetItem));"
-         , "  heap = malloc(HEAP_SIZE * sizeof(Unsigned));"
-         , "  heap_tag = malloc(HEAP_SIZE * sizeof(Tag));"
+         , "  heap = malloc(HEAP_SIZE * sizeof(TaggedWord));"
          , "  hp = 0;"
          , "  uint8_t flagApplyPtr;"
          , "  uint8_t flagApplyDone;"
@@ -226,8 +254,7 @@ gen opts = do
         , "  Unsigned addr = sp[-1].val + n;"
         , "  sp--;"
         , "  for (uint32_t i = 1; i <= n; i++) {"
-        , "    sp[0].tag = heap_tag[addr-i];"
-        , "    sp[0].val = heap[addr-i];"
+        , "    sp[0] = heap[addr-i];"
         , "    sp++;"
         , "  }"
         , "}"
@@ -238,8 +265,7 @@ gen opts = do
         , "  assert(isPtr(sp[-1].tag));"
         , "  Unsigned addr = sp[-1].val + " ++ show (n-1) ++ ";"
         ] ++ concat
-        [ [ "  sp[0].tag = heap_tag[addr];"
-          , "  sp[0].val = heap[addr];"
+        [ [ "  sp[0] = heap[addr];"
           , "  sp++; addr--;"
           ]
         | i <- [1..n]
@@ -251,8 +277,7 @@ gen opts = do
         , "  uint32_t n = sp - rp[-1].sp;"
         , "  Unsigned addr = hp;"
         , "  for (uint32_t i = 0; i < n; i++) {"
-        , "    heap_tag[hp] = sp[-1].tag;"
-        , "    heap[hp] = sp[-1].val;"
+        , "    heap[hp] = sp[-1];"
         , "    hp++;"
         , "    sp--;"
         , "  }"
@@ -266,8 +291,7 @@ gen opts = do
            [ "{"
            , "  Unsigned addr = hp;"
            ]
-        ++ concat [ [ "  heap_tag[hp] = sp[-1].tag;"
-                    , "  heap[hp] = sp[-1].val;"
+        ++ concat [ [ "  heap[hp] = sp[-1];"
                     , "  hp++; sp--;"
                     ]
                   | i <- [1..n] ]
@@ -361,6 +385,6 @@ gen opts = do
             other -> 2
     instr HALT =
       return
-        [ "render(sp[-1].tag, sp[-1].val);"
+        [ "render(sp[-1]);"
         , "printf(\"\\n\");"
         , "return 0;" ]

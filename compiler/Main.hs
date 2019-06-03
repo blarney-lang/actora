@@ -53,6 +53,7 @@ main = do
             CGenOpts {
                 sourceProg = prog
               , targetDir  = dir
+              , genMode    = CGen_32
             }
           exitSuccess
         dir:dirs -> do
