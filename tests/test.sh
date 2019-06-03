@@ -14,13 +14,13 @@ fi
 if [ "$1" == "regen" ]; then
   for PROG in $(ls *.erl); do
     BASE=$(basename $PROG .erl)
-    $ELITE $PROG > $BASE.out
+    $ELITE -r $PROG > $BASE.out
   done
   exit -1
 fi
 
 # Check correctness of compiler/semantics
-echo "TESTING COMPILER AND SMALL-STEP SEMANITCS"
+echo "TESTING COMPILER AND SMALL-STEP SEMANTICS"
 rm -f *.got
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)

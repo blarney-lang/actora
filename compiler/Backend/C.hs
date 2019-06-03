@@ -76,9 +76,9 @@ gen opts = do
          , "#define PTR_APP   1"
          , "#define PTR_CONS  3"
          , "#define PTR_TUPLE 5"
-         , "#define INT       2"
-         , "#define ATOM      4"
-         , "#define FUN       6"
+         , "#define INT       0"
+         , "#define ATOM      2"
+         , "#define FUN       4"
          ]
       ++ [ "#define LABEL_" ++ mangle label ++ " " ++ show n
          | (label, n) <- zip labels [0..] ]
