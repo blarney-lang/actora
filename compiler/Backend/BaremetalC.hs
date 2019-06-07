@@ -188,7 +188,7 @@ genBareC opts = do
     atomVal :: Atom -> String
     atomVal (INT i) = show i
     atomVal (ATOM a) = "ATOM_" ++ mangle a
-    atomVal (FUN (InstrLabel f) n) = "LABEL_" ++ mangle f
+    atomVal (FUN (InstrLabel f) n) = "&&" ++ mangle f
 
     ptrKind :: PtrKind -> String
     ptrKind PtrApp = "PTR_APP"
