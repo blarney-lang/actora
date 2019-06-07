@@ -37,11 +37,13 @@ genBareC opts = do
       , render
       , main
       ]
-
+-- TODO: C stack
     link :: String
     link = unlines
       [ "OUTPUT_ARCH( \"riscv\" )"
-      , "__stackBase = 0x0000fffc;"
+      , "C_STACK_SIZE = 1024;"
+      , "STACK_SIZE = 4096;"
+      , "RET_STACK_SIZE = 1024;"
       , "SECTIONS"
       , "{"
       , "  . = 0;"
@@ -51,10 +53,13 @@ genBareC opts = do
       , "  .rodata : { *.o(.rodata*) }"
       , "  .sdata  : { *.o(.sdata*) }"
       , "  .data   : { *.o(.data*) }"
+      , "  . += C_STACK_SIZE;"
+      , "  __stackBase = ALIGN(.);"
+      , "  . += 4;"
       , "  __e_retBase = ALIGN(.);"
-      , "  . += 4*RET_STACK_SIZE;"
+      , "  . += RET_STACK_SIZE;"
       , "  __e_stackBase = ALIGN(.);"
-      , "  . += 4*STACK_SIZE;"
+      , "  . += STACK_SIZE;"
       , "  __e_heapBase = ALIGN(.);"
       , "  __e_heapSize = 0x10000 - __e_heapBase;"
       , "}"
@@ -117,9 +122,9 @@ genBareC opts = do
       , "RetItem* rp;"
       , "TaggedWord* heap;"
       , "Unsigned hp;"
-      , "extern TaggedWord* __e_stackBase;"
-      , "extern TaggedWord* __e_heapBase;"
-      , "extern TaggedWord* __e_retBase;"
+      , "extern uint32_t __e_stackBase;"
+      , "extern uint32_t __e_heapBase;"
+      , "extern uint32_t __e_retBase;"
       ]
 
     atomNames :: [String]
@@ -138,16 +143,16 @@ genBareC opts = do
       , "  if (type(w.tag) == PTR_APP) printf(\"APP\");"
       , "  if (type(w.tag) == PTR_CONS) {"
       , "    printf(\"[\");"
-      , "    render(heap[w.val]);"
+      , "    render(*((TaggedWord*) w.val));"
       , "    printf(\"|\");"
-      , "    render(heap[w.val+1]);"
+      , "    render(*((TaggedWord*) w.val+1));"
       , "    printf(\"]\");"
       , "  }"
       , "  if (type(w.tag) == PTR_TUPLE) {"
       , "    Unsigned n = ptrLen(w.tag);"
       , "    printf(\"{\");"
       , "    for (Unsigned i = 0; i < n; i++) {"
-      , "      render(heap[w.val+i]);"
+      , "      render(*((TaggedWord*) w.val+i));"
       , "      if (i < n-1) printf(\", \");"
       , "    }"
       , "    printf(\"}\");"
@@ -158,9 +163,9 @@ genBareC opts = do
     main :: [String]
     main =
          [ "int main() {"
-         , "  sp = (TaggedWord*) __e_stackBase;"
-         , "  rp = (RetItem*) __e_retBase;"
-         , "  heap = (TaggedWord*) __e_heapBase;"
+         , "  sp = (TaggedWord*) &__e_stackBase;"
+         , "  rp = (RetItem*) &__e_retBase;"
+         , "  heap = (TaggedWord*) &__e_heapBase;"
          , "  hp = 0;"
          , "  uint8_t flagApplyPtr;"
          , "  uint8_t flagApplyDone;"
@@ -168,7 +173,10 @@ genBareC opts = do
          , "  uint8_t flagApplyUnder;"
          ]
       ++ map ("  " ++) (instrs bytecode)
-      ++ [ "  return -1;"
+      ++ [ "  _icall_fail:"
+         , "  _load_fail:"
+         , "  _prim_fail:"
+         , "  return -1;"
          , "}"
          ]
    
@@ -220,7 +228,7 @@ genBareC opts = do
     instr ICALL = do
       retLabel <- fresh
       return
-        [ "assert(type(sp[-1].tag) == FUN);"
+        [ "if (type(sp[-1].tag) != FUN) goto _icall_fail;"
         , "rp->ip = &&" ++ mangle retLabel ++ ";"
         , "rp->sp = sp - funArity(sp[-1].tag) - 1;"
         , "rp++;"
@@ -249,7 +257,7 @@ genBareC opts = do
     instr (LOAD Nothing) =
       return
         [ "{"
-        , "  assert(isPtr(sp[-1].tag));"
+        , "  if (! isPtr(sp[-1].tag)) goto _load_fail;"
         , "  uint32_t n = ptrLen(sp[-1].tag);"
         , "  TaggedWord* addr = toPtr(sp[-1].val) + n;"
         , "  sp--;"
@@ -262,7 +270,7 @@ genBareC opts = do
     instr (LOAD (Just n)) =
       return $
         [ "{"
-        , "  assert(isPtr(sp[-1].tag));"
+        , "  if (! isPtr(sp[-1].tag)) goto _load_fail;"
         , "  TaggedWord* addr = toPtr(sp[-1].val);"
         ] ++ concat
         [ [ "  sp[0] = addr[" ++ show (n-i) ++ "];"
@@ -339,7 +347,7 @@ genBareC opts = do
         ]
     instr (PRIM prim) =
         return
-          [ "assert(" ++ assert ++ ");"
+          [ "if (!(" ++ assert ++ ")) goto _prim_fail;"
           , "sp[-" ++ show pop ++ "].tag = " ++ resultTag ++ ";"
           , "sp[-" ++ show pop ++ "].val = " ++ result ++ ";"
           , if pop > 1 then "sp -= " ++ show (pop-1) ++ ";" else ""
