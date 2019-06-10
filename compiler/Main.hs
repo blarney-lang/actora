@@ -10,24 +10,29 @@ import Parser
 import Compiler
 import Bytecode
 import Semantics
-import Backend.StandardC as StdC
-import Backend.BaremetalC as BareC
+import CBackend
 
 -- Command-line flags
 data Flag =
     Run
-  | CompileToStdC String
-  | CompileToBareC String
+  | CompileToC String
+  | CompileToBareC16
+  | CompileToBareC32
+  | CompileToC32
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
   [ Option ['r'] [] (NoArg Run)
       "Run using small-step semantics"
-  , Option ['c'] [] (ReqArg CompileToStdC "DIR")
-      "Compile to standard C"
-  , Option ['b'] [] (ReqArg CompileToBareC "DIR")
-      "Compile to baremetal C"
+  , Option ['c'] [] (ReqArg CompileToC "DIR")
+      "Compile to C"
+  , Option [] ["c32"] (NoArg CompileToC32)
+      "C backend: 32-bit standard C (default)"
+  , Option [] ["b16"] (NoArg CompileToBareC16)
+      "C backend: 16-bit baremetal"
+  , Option [] ["b32"] (NoArg CompileToBareC32)
+      "C backend: 32-bit baremetal"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -52,27 +57,18 @@ main = do
         putStrLn (run (compile prog))
         exitSuccess
       -- Generate C code
-      case [dir | CompileToStdC dir <- flags] of
+      case [dir | CompileToC dir <- flags] of
         [] -> return ()
         [dir] -> do
+          let mode = 
+                if CompileToBareC16 `elem` flags then BareGen_16
+                else if CompileToBareC32 `elem` flags then BareGen_32
+                else CGen_32
           genC $
             CGenOpts {
-                StdC.sourceProg = prog
-              , StdC.targetDir  = dir
-              , StdC.genMode    = CGen_32
-            }
-          exitSuccess
-        dir:dirs -> do
-          putStrLn "Expected on target directory for compilation"
-          exitFailure
-      -- Generate baremetal C code
-      case [dir | CompileToBareC dir <- flags] of
-        [] -> return ()
-        [dir] -> do
-          genBareC $
-            BareCGenOpts {
-                BareC.sourceProg = prog
-              , BareC.targetDir  = dir
+                sourceProg = prog
+              , targetDir  = dir
+              , genMode    = mode
             }
           exitSuccess
         dir:dirs -> do

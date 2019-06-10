@@ -1,8 +1,9 @@
-module Backend.StandardC where
+module CBackend where
 
 -- Standard imports
 import Data.Char
 import System.Directory
+import Control.Monad
 
 -- Local imports
 import Syntax
@@ -10,25 +11,48 @@ import Bytecode
 import Compiler
 import Monad.Fresh
 
--- C generator options
+-- Word width
+data CGenMode = BareGen_16 | BareGen_32 | CGen_32
+
+-- Baremetal C generator options
 data CGenOpts =
   CGenOpts {
-    sourceProg   :: [Decl]
+    genMode      :: CGenMode
+  , sourceProg   :: [Decl]
   , targetDir    :: String
-  , genMode      :: CGenMode
   }
-
--- Word width
-data CGenMode = CGen_16 | CGen_32 | CGen_64
 
 genC :: CGenOpts -> IO ()
 genC opts = do
     createDirectory (targetDir opts)
     writeFile (targetDir opts ++ "/main.c") ccode
-    writeFile (targetDir opts ++ "/Makefile") makefile
+    if baremetal
+      then do
+        writeFile (targetDir opts ++ "/link.ld") link
+      else do
+        writeFile (targetDir opts ++ "/Makefile") stdMakefile
   where
     bytecode :: [Instr]
     bytecode = compile (sourceProg opts)
+
+    baremetal :: Bool
+    baremetal =
+      case genMode opts of
+        BareGen_16 -> True
+        BareGen_32 -> True
+        CGen_32 -> False
+
+    int_t :: String
+    int_t =
+      case genMode opts of
+        BareGen_16 -> "int16_t"
+        BareGen_32 -> "int32_t"
+        CGen_32 -> "int32_t"
+
+    defaultDataSize     = 32768 -- Must be a power of 2
+    defaultCStackSize   = 1024
+    defaultRetStackSize = 1024
+    defaultStackSize    = 4096
 
     ccode :: String
     ccode = unlines $ concat
@@ -42,15 +66,46 @@ genC opts = do
       , main
       ]
 
-    makefile :: String
-    makefile = unlines
-      [ "STACK_SIZE ?= 32000"
-      , "HEAP_SIZE ?= 32000"
+    link :: String
+    link = unlines
+      [ "OUTPUT_ARCH( \"riscv\" )"
+      , "C_STACK_SIZE = " ++ show defaultCStackSize ++ ";"
+      , "RET_STACK_SIZE = " ++ show defaultRetStackSize ++ ";"
+      , "STACK_SIZE = " ++ show defaultStackSize ++ ";"
+      , "DATA_MEM_SIZE = " ++ show (2*defaultDataSize) ++ ";"
+      , "SECTIONS"
+      , "{"
+      , "  . = 0;"
+      , "  .text   : { *.o(.text*) }"
+      , "  . = DATA_MEM_SIZE;"
+      , "  .bss    : { *.o(.bss*) }"
+      , "  .rodata : { *.o(.rodata*) }"
+      , "  .sdata  : { *.o(.sdata*) }"
+      , "  .data   : { *.o(.data*) }"
+      , "  . += C_STACK_SIZE;"
+      , "  __stackBase = ALIGN(.);"
+      , "  . += 4;"
+      , "  __e_retBase = ALIGN(.);"
+      , "  . += RET_STACK_SIZE;"
+      , "  __e_stackBase = ALIGN(.);"
+      , "  . += STACK_SIZE;"
+      , "  __e_heapBase = ALIGN(.);"
+      , "  __e_heapSize = DATA_MEM_SIZE - __e_heapBase;"
+      , "}"
+      ]
+
+    stdMakefile :: String
+    stdMakefile = unlines
+      [ "STACK_SIZE ?= " ++ show defaultStackSize
+      , "RET_STACK_SIZE ?= " ++ show defaultRetStackSize
+      , "HEAP_SIZE ?= " ++ show (defaultDataSize -
+                                 defaultRetStackSize -
+                                 defaultStackSize)
       , "main: main.c"
       , "\t@gcc -D STACK_SIZE=$(STACK_SIZE)         \\"
-      , "       -D RET_STACK_SIZE=$(STACK_SIZE)     \\"
+      , "       -D RET_STACK_SIZE=$(RET_STACK_SIZE) \\"
       , "       -D HEAP_SIZE=$(HEAP_SIZE)           \\"
-      , "       -O3 main.c -o main"
+      , "       -m32 -O3 main.c -o main"
       ]
 
     mangle :: String -> String
@@ -62,13 +117,16 @@ genC opts = do
 
     includes :: [String]
     includes =
-      [ "#include <stdio.h>"
-      , "#include <stdlib.h>"
-      , "#include <stdint.h>"
-      , "#include <stdbool.h>"
-      , "#include <assert.h>"
-      ]
-
+        [ "#include <stdint.h>"
+        , "#include <stdbool.h>"
+        ]
+     ++ if baremetal
+        then []
+        else
+          [ "#include <stdio.h>"
+          , "#include <stdlib.h>"
+          ]
+      
     defines :: [String]
     defines =
          [ "#define INLINE inline __attribute__((always_inline))"
@@ -80,12 +138,18 @@ genC opts = do
          , "#define ATOM      2"
          , "#define FUN       4"
          ]
-      ++ [ "#define LABEL_" ++ mangle label ++ " " ++ show n
-         | (label, n) <- zip labels [0..] ]
       ++ [ "#define ATOM_" ++ mangle atom ++ " " ++ show n
          | (atom, n) <- zip (atoms bytecode) [0..] ]
       where
         labels = [label | LABEL label <- bytecode]
+
+    typeDecls :: [String]
+    typeDecls =
+      [ "typedef u" ++ int_t ++ " Unsigned;"
+      , "typedef " ++ int_t ++ " Signed;"
+      , "typedef struct { Unsigned tag; Unsigned val; } TaggedWord;"
+      , "typedef struct { TaggedWord* sp; void* ip; } RetItem;"
+      ]
 
     helpers :: [String]
     helpers =
@@ -95,20 +159,11 @@ genC opts = do
       , "INLINE bool isPtr(Unsigned t) { return t & 1; }"
       , "INLINE Unsigned makeTag(Unsigned kind, Unsigned n)"
       , "  { return (n << 3) | kind; }"
+      , "INLINE TaggedWord* toPtr(Unsigned p)"
+      , "  { return (TaggedWord*) ((uintptr_t) p); }"
+      , "INLINE Unsigned fromPtr(TaggedWord* p)"
+      , "  { return (Unsigned) ((uintptr_t) p); }"
       ]
-
-    typeDecls :: [String]
-    typeDecls =
-      [ "typedef uint" ++ mode (genMode opts) ++ "_t Unsigned;"
-      , "typedef int" ++ mode (genMode opts) ++ "_t Signed;"
-      , "typedef struct { Unsigned tag; Unsigned val; } TaggedWord;"
-      , "typedef struct { TaggedWord* sp; void* ip; } RetItem;"
-      ]
-
-    mode :: CGenMode -> String
-    mode (CGen_16) = "16"
-    mode (CGen_32) = "32"
-    mode (CGen_64) = "64"
 
     globals :: [String]
     globals =
@@ -116,7 +171,14 @@ genC opts = do
       , "RetItem* rp;"
       , "TaggedWord* heap;"
       , "Unsigned hp;"
-      ]
+      ] ++
+      if baremetal
+        then
+          [ "extern uint32_t __e_stackBase;"
+          , "extern uint32_t __e_heapBase;"
+          , "extern uint32_t __e_retBase;"
+          ]
+        else []
 
     atomNames :: [String]
     atomNames =
@@ -128,22 +190,24 @@ genC opts = do
     render :: [String]
     render =
       [ "void render(TaggedWord w) {"
-      , "  if (type(w.tag) == INT) printf(\"%d\", w.val);"
+      , if baremetal
+          then "  if (type(w.tag) == INT) printf(\"0x%x\", w.val);"
+          else "  if (type(w.tag) == INT) printf(\"%d\", w.val);"
       , "  if (type(w.tag) == ATOM) printf(\"%s\", atoms[w.val]);"
       , "  if (type(w.tag) == FUN) printf(\"FUN\");"
       , "  if (type(w.tag) == PTR_APP) printf(\"APP\");"
       , "  if (type(w.tag) == PTR_CONS) {"
       , "    printf(\"[\");"
-      , "    render(heap[w.val]);"
+      , "    render(*((TaggedWord*) w.val));"
       , "    printf(\"|\");"
-      , "    render(heap[w.val+1]);"
+      , "    render(*((TaggedWord*) w.val+1));"
       , "    printf(\"]\");"
       , "  }"
       , "  if (type(w.tag) == PTR_TUPLE) {"
       , "    Unsigned n = ptrLen(w.tag);"
       , "    printf(\"{\");"
       , "    for (Unsigned i = 0; i < n; i++) {"
-      , "      render(heap[w.val+i]);"
+      , "      render(*((TaggedWord*) w.val+i));"
       , "      if (i < n-1) printf(\", \");"
       , "    }"
       , "    printf(\"}\");"
@@ -154,21 +218,30 @@ genC opts = do
     main :: [String]
     main =
          [ "int main() {"
-         , "  sp = malloc(STACK_SIZE * sizeof(TaggedWord));"
-         , "  rp = malloc(RET_STACK_SIZE * sizeof(RetItem));"
-         , "  heap = malloc(HEAP_SIZE * sizeof(TaggedWord));"
-         , "  hp = 0;"
+         ]
+      ++ ( if baremetal
+           then
+             [ "  sp = (TaggedWord*) &__e_stackBase;"
+             , "  rp = (RetItem*) &__e_retBase;"
+             , "  heap = (TaggedWord*) &__e_heapBase;"
+             ]
+           else
+             [ "  sp = (TaggedWord*) malloc(STACK_SIZE * sizeof(TaggedWord));"
+             , "  rp = (RetItem*) malloc(RET_STACK_SIZE * sizeof(RetItem));"
+             , "  heap = (TaggedWord*) malloc(HEAP_SIZE * sizeof(TaggedWord));"
+             ]
+         )
+      ++ [ "  hp = 0;"
          , "  uint8_t flagApplyPtr;"
          , "  uint8_t flagApplyDone;"
          , "  uint8_t flagApplyOk;"
          , "  uint8_t flagApplyUnder;"
          ]
-      ++ [ "  void* labels[] = {" ]
-      ++ [ "  &&" ++ mangle label ++ ", "
-         | LABEL label <- bytecode ]
-      ++ [ "  };" ]
       ++ map ("  " ++) (instrs bytecode)
-      ++ [ "  return -1;"
+      ++ [ "  _icall_fail:"
+         , "  _load_fail:"
+         , "  _prim_fail:"
+         , "  return -1;"
          , "}"
          ]
    
@@ -180,7 +253,7 @@ genC opts = do
     atomVal :: Atom -> String
     atomVal (INT i) = show i
     atomVal (ATOM a) = "ATOM_" ++ mangle a
-    atomVal (FUN (InstrLabel f) n) = "LABEL_" ++ mangle f
+    atomVal (FUN (InstrLabel f) n) = "(Unsigned) &&" ++ mangle f
 
     ptrKind :: PtrKind -> String
     ptrKind PtrApp = "PTR_APP"
@@ -220,12 +293,12 @@ genC opts = do
     instr ICALL = do
       retLabel <- fresh
       return
-        [ "assert(type(sp[-1].tag) == FUN);"
+        [ "if (type(sp[-1].tag) != FUN) goto _icall_fail;"
         , "rp->ip = &&" ++ mangle retLabel ++ ";"
         , "rp->sp = sp - funArity(sp[-1].tag) - 1;"
         , "rp++;"
         , "sp--;"
-        , "goto *labels[sp[0].val];"
+        , "goto *((void*) ((uintptr_t) sp[0].val));"
         , mangle retLabel ++ ":"
         ]
     instr (COPY n) =
@@ -249,12 +322,12 @@ genC opts = do
     instr (LOAD Nothing) =
       return
         [ "{"
-        , "  assert(isPtr(sp[-1].tag));"
-        , "  Unsigned n = ptrLen(sp[-1].tag);"
-        , "  Unsigned addr = sp[-1].val + n;"
+        , "  if (! isPtr(sp[-1].tag)) goto _load_fail;"
+        , "  uint32_t n = ptrLen(sp[-1].tag);"
+        , "  TaggedWord* addr = toPtr(sp[-1].val) + n;"
         , "  sp--;"
-        , "  for (Unsigned i = 1; i <= n; i++) {"
-        , "    sp[0] = heap[addr-i];"
+        , "  for (uint32_t i = 1; i <= n; i++) {"
+        , "    sp[0] = addr[-i];"
         , "    sp++;"
         , "  }"
         , "}"
@@ -262,11 +335,11 @@ genC opts = do
     instr (LOAD (Just n)) =
       return $
         [ "{"
-        , "  assert(isPtr(sp[-1].tag));"
-        , "  Unsigned addr = sp[-1].val + " ++ show (n-1) ++ ";"
+        , "  if (! isPtr(sp[-1].tag)) goto _load_fail;"
+        , "  TaggedWord* addr = toPtr(sp[-1].val);"
         ] ++ concat
-        [ [ "  sp[0] = heap[addr];"
-          , "  sp++; addr--;"
+        [ [ "  sp[0] = addr[" ++ show (n-i) ++ "];"
+          , "  sp++;"
           ]
         | i <- [1..n]
         ] ++
@@ -274,29 +347,29 @@ genC opts = do
     instr (STORE Nothing k) =
       return
         [ "{"
-        , "  Unsigned n = sp - rp[-1].sp;"
-        , "  Unsigned addr = hp;"
-        , "  for (Unsigned i = 0; i < n; i++) {"
+        , "  uint32_t n = sp - rp[-1].sp;"
+        , "  TaggedWord* addr = &heap[hp];"
+        , "  for (uint32_t i = 0; i < n; i++) {"
         , "    heap[hp] = sp[-1];"
         , "    hp++;"
         , "    sp--;"
         , "  }"
         , "  sp[0].tag = makeTag(" ++ ptrKind k ++ ", n);"
-        , "  sp[0].val = addr;"
+        , "  sp[0].val = fromPtr(addr);"
         , "  sp++;"
         , "}"
         ]
     instr (STORE (Just n) k) =
       return $
            [ "{"
-           , "  Unsigned addr = hp;"
+           , "  TaggedWord* addr = &heap[hp];"
            ]
         ++ concat [ [ "  heap[hp] = sp[-1];"
                     , "  hp++; sp--;"
                     ]
                   | i <- [1..n] ]
         ++ [ "  sp[0].tag = makeTag(" ++ ptrKind k ++ ", " ++ show n ++ ");"
-           , "  sp[0].val = addr;"
+           , "  sp[0].val = fromPtr(addr);"
            , "  sp++;"
            , "}"
            ]
@@ -325,7 +398,7 @@ genC opts = do
     instr CAN_APPLY =
       return
         [ "{"
-        , "  Unsigned len = sp - rp[-1].sp;"
+        , "  uint32_t len = sp - rp[-1].sp;"
         , "  flagApplyPtr = type(sp[-1].tag) == PTR_APP;"
         , "  flagApplyDone = type(sp[-1].tag) != PTR_APP &&"
         , "                   !(type(sp[-1].tag) == FUN &&"
@@ -339,7 +412,7 @@ genC opts = do
         ]
     instr (PRIM prim) =
         return
-          [ "assert(" ++ assert ++ ");"
+          [ "if (!(" ++ assert ++ ")) goto _prim_fail;"
           , "sp[-" ++ show pop ++ "].tag = " ++ resultTag ++ ";"
           , "sp[-" ++ show pop ++ "].val = " ++ result ++ ";"
           , if pop > 1 then "sp -= " ++ show (pop-1) ++ ";" else ""
