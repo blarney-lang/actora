@@ -1,8 +1,8 @@
 #include <stdarg.h>
 #include <baremetal.h>
 
-#define UART_DATA 0x00000000
-#define UART_CTRL 0x00000004
+#define UART_DATA 0x10000000
+#define UART_CTRL 0x10000004
 
 int putchar(int ch)
 {

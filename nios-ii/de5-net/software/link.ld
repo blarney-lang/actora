@@ -5,25 +5,26 @@ HEAP_SIZE = 28000;
 
 SECTIONS
 {
-  . = 0x10000;
-  .text   : { *.o(.text*) }
-  ASSERT(. < 0x14000, "Instruction space exceeded")
-  . = 0x20000;
-  _gp = 0x20000;
-  .bss    : { *.o(.bss*) } = 0
+  . = 0;
+  _gp = 0;
+  .bss    : { *.o(.bss*) }
   .rodata : { *.o(.rodata*) }
   .sdata  : { *.o(.sdata*) }
   .data   : { *.o(.data*) }
+  __dataEnd = .;
   . += C_STACK_SIZE;
-  __stackBase = ALIGN(.);
+  __stackBase = .;
   . += 4;
-  __e_retBase = ALIGN(.);
+  __e_retBase = .;
   . += RET_STACK_SIZE;
-  __e_stackBase = ALIGN(.);
+  __e_stackBase = .;
   . += STACK_SIZE;
-  __e_heapBase = ALIGN(.);
+  __e_heapBase = .;
   . += HEAP_SIZE;
-  __e_heapEnd = ALIGN(.);
-  ASSERT(. < 0x30000, "Data space exceeded")
-  . = 0x30000;
+  __e_heapEnd = .;
+  ASSERT(. < 0x10000, "Data space exceeded")
+  . = 0x10000;
+  __textBase = 0x10000;
+  .text   : { *.o(.text*) }
+  ASSERT(. < 0x14000, "Instruction space exceeded")
 }
