@@ -24,11 +24,10 @@ data CGenOpts =
 
 genC :: CGenOpts -> IO ()
 genC opts = do
-    createDirectory (targetDir opts)
+    createDirectoryIfMissing True (targetDir opts)
     writeFile (targetDir opts ++ "/main.c") ccode
     if baremetal
-      then do
-        writeFile (targetDir opts ++ "/link.ld") link
+      then return ()
       else do
         writeFile (targetDir opts ++ "/Makefile") stdMakefile
   where
@@ -49,10 +48,9 @@ genC opts = do
         BareGen_32 -> "int32_t"
         CGen_32 -> "int32_t"
 
-    defaultDataSize     = 32768 -- Must be a power of 2
-    defaultCStackSize   = 1024
     defaultRetStackSize = 1024
     defaultStackSize    = 4096
+    defaultHeapSize     = 28000
 
     ccode :: String
     ccode = unlines $ concat
@@ -66,41 +64,11 @@ genC opts = do
       , main
       ]
 
-    link :: String
-    link = unlines
-      [ "OUTPUT_ARCH( \"riscv\" )"
-      , "C_STACK_SIZE = " ++ show defaultCStackSize ++ ";"
-      , "RET_STACK_SIZE = " ++ show defaultRetStackSize ++ ";"
-      , "STACK_SIZE = " ++ show defaultStackSize ++ ";"
-      , "DATA_MEM_SIZE = " ++ show (2*defaultDataSize) ++ ";"
-      , "SECTIONS"
-      , "{"
-      , "  . = 0;"
-      , "  .text   : { *.o(.text*) }"
-      , "  . = DATA_MEM_SIZE;"
-      , "  .bss    : { *.o(.bss*) }"
-      , "  .rodata : { *.o(.rodata*) }"
-      , "  .sdata  : { *.o(.sdata*) }"
-      , "  .data   : { *.o(.data*) }"
-      , "  . += C_STACK_SIZE;"
-      , "  __stackBase = ALIGN(.);"
-      , "  . += 4;"
-      , "  __e_retBase = ALIGN(.);"
-      , "  . += RET_STACK_SIZE;"
-      , "  __e_stackBase = ALIGN(.);"
-      , "  . += STACK_SIZE;"
-      , "  __e_heapBase = ALIGN(.);"
-      , "  __e_heapSize = DATA_MEM_SIZE - __e_heapBase;"
-      , "}"
-      ]
-
     stdMakefile :: String
     stdMakefile = unlines
       [ "STACK_SIZE ?= " ++ show defaultStackSize
       , "RET_STACK_SIZE ?= " ++ show defaultRetStackSize
-      , "HEAP_SIZE ?= " ++ show (defaultDataSize -
-                                 defaultRetStackSize -
-                                 defaultStackSize)
+      , "HEAP_SIZE ?= " ++ show (defaultHeapSize)
       , "main: main.c"
       , "\t@gcc -D STACK_SIZE=$(STACK_SIZE)         \\"
       , "       -D RET_STACK_SIZE=$(RET_STACK_SIZE) \\"
@@ -121,7 +89,9 @@ genC opts = do
         , "#include <stdbool.h>"
         ]
      ++ if baremetal
-        then []
+        then
+          [ "#include <baremetal.h>"
+          ]
         else
           [ "#include <stdio.h>"
           , "#include <stdlib.h>"
@@ -226,9 +196,9 @@ genC opts = do
              , "  heap = (TaggedWord*) &__e_heapBase;"
              ]
            else
-             [ "  sp = (TaggedWord*) malloc(STACK_SIZE * sizeof(TaggedWord));"
-             , "  rp = (RetItem*) malloc(RET_STACK_SIZE * sizeof(RetItem));"
-             , "  heap = (TaggedWord*) malloc(HEAP_SIZE * sizeof(TaggedWord));"
+             [ "  sp = (TaggedWord*) malloc(STACK_SIZE);"
+             , "  rp = (RetItem*) malloc(RET_STACK_SIZE);"
+             , "  heap = (TaggedWord*) malloc(HEAP_SIZE);"
              ]
          )
       ++ [ "  hp = 0;"
