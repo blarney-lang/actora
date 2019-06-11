@@ -14,7 +14,7 @@ fi
 if [ "$1" == "regen" ]; then
   for PROG in $(ls *.erl); do
     BASE=$(basename $PROG .erl)
-    $ELITE -r $PROG > $BASE.out
+    $ELITE -r $PROG > out/$BASE.out
   done
   exit -1
 fi
@@ -26,7 +26,7 @@ for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
   $ELITE -r $PROG > $BASE.got
-  if cmp $BASE.got $BASE.out; then
+  if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else
     echo -e "${RED}FAILED${NC}"
@@ -47,7 +47,7 @@ for PROG in $(ls *.erl); do
   $ELITE -c tmp/$BASE $PROG
   make -s -C tmp/$BASE
   tmp/$BASE/main > $BASE.got
-  if cmp $BASE.got $BASE.out; then
+  if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else
     echo -e "${RED}FAILED${NC}"
