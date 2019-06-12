@@ -22,6 +22,9 @@ SECTIONS
   __e_heapBase = .;
   . += HEAP_SIZE;
   __e_heapEnd = .;
+  __e_heap2Base = .;
+  . += HEAP_SIZE;
+  __e_heap2End = .;
   ASSERT(. < 0x10000, "Data space exceeded")
   . = 0x10000;
   __textBase = 0x10000;

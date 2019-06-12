@@ -60,6 +60,7 @@ genC opts = do
       , helpers
       , atomNames
       , globals
+      , garbageCollector
       , render
       , main
       ]
@@ -107,6 +108,7 @@ genC opts = do
          , "#define INT       0"
          , "#define ATOM      2"
          , "#define FUN       4"
+         , "#define GC        6"
          ]
       ++ [ "#define ATOM_" ++ mangle atom ++ " " ++ show n
          | (atom, n) <- zip (atoms bytecode) [0..] ]
@@ -137,15 +139,18 @@ genC opts = do
 
     globals :: [String]
     globals =
-      [ "TaggedWord* sp;"
+      [ "TaggedWord* stackBase;"
+      , "TaggedWord* sp;"
       , "RetItem* rp;"
       , "TaggedWord* heap;"
+      , "TaggedWord* heap2;"
       , "Unsigned hp;"
       ] ++
       if baremetal
         then
           [ "extern uint32_t __e_stackBase;"
           , "extern uint32_t __e_heapBase;"
+          , "extern uint32_t __e_heap2Base;"
           , "extern uint32_t __e_retBase;"
           ]
         else []
@@ -191,14 +196,16 @@ genC opts = do
          ]
       ++ ( if baremetal
            then
-             [ "  sp = (TaggedWord*) &__e_stackBase;"
+             [ "  sp = stackBase = (TaggedWord*) &__e_stackBase;"
              , "  rp = (RetItem*) &__e_retBase;"
              , "  heap = (TaggedWord*) &__e_heapBase;"
+             , "  heap2 = (TaggedWord*) &__e_heap2Base;"
              ]
            else
-             [ "  sp = (TaggedWord*) malloc(STACK_SIZE);"
+             [ "  sp = stackBase = (TaggedWord*) malloc(STACK_SIZE);"
              , "  rp = (RetItem*) malloc(RET_STACK_SIZE);"
              , "  heap = (TaggedWord*) malloc(HEAP_SIZE);"
+             , "  heap2 = (TaggedWord*) malloc(HEAP_SIZE);"
              ]
          )
       ++ [ "  hp = 0;"
@@ -431,3 +438,48 @@ genC opts = do
         [ "render(sp[-1]);"
         , "printf(\"\\n\");"
         , "return 0;" ]
+
+    garbageCollector =
+      [ "INLINE TaggedWord* gcCopy(TaggedWord* w, TaggedWord* front) {"
+      , "  if (isPtr(w->tag)) {"
+      , "    TaggedWord* p = toPtr(w->val);"
+      , "    if (p->tag == GC)"
+      , "      w->val = p->val;"
+      , "    else {"
+      , "      uint32_t len = ptrLen(w->tag);"
+      , "      for (uint32_t i = 0; i < len; i++) front[i] = p[i];"
+      , "      p->tag = GC;"
+      , "      p->val = fromPtr(front);"
+      , "      w->val = fromPtr(front);"
+      , "      front += len;"
+      , "    }"
+      , "  }"
+      , "  return front;"
+      , "}"
+      , ""
+      , "void gc()"
+      , "{ "
+      , "  // Setup to-space"
+      , "  TaggedWord* back = heap2;"
+      , "  TaggedWord* front = heap2;"
+      , ""
+      , "  // Loop over stack"
+      , "  TaggedWord* s = stackBase;"
+      , "  while (s != sp) {"
+      , "    front = gcCopy(s, front);"
+      , "    s++;"
+      , "  }"
+      , ""
+      , "  // Copy reachable heap to to-space"
+      , "  while (back != front) {"
+      , "    front = gcCopy(back, front);"
+      , "    back++;"
+      , "  }"
+      , ""
+      , "  // Swap from-space and to-space"
+      , "  TaggedWord* tmp;"
+      , "  tmp = heap;"
+      , "  heap = heap2;"
+      , "  heap2 = tmp;"
+      , "}"
+      ]
