@@ -390,8 +390,8 @@ genC opts = do
     instr (PRIM prim) =
         return
           [ "if (!(" ++ assert ++ ")) goto _prim_fail;"
-          , "sp[-" ++ show pop ++ "].tag = " ++ resultTag ++ ";"
           , "sp[-" ++ show pop ++ "].val = " ++ result ++ ";"
+          , "sp[-" ++ show pop ++ "].tag = " ++ resultTag ++ ";"
           , if pop > 1 then "sp -= " ++ show (pop-1) ++ ";" else ""
           ]
       where
@@ -413,9 +413,9 @@ genC opts = do
             PrimNotEq -> "sp[-1].tag == sp[-2].tag &&"
                       ++ "sp[-1].val == sp[-2].val ? ATOM_false : ATOM_true"
             PrimLess -> "sp[-1].tag == INT && sp[-2].tag == INT &&"
-                     ++ "sp[-1].val < sp[-2].val ? ATOM_false : ATOM_true"
+                     ++ "sp[-1].val < sp[-2].val ? ATOM_true : ATOM_false"
             PrimLessEq -> "sp[-1].tag == INT && sp[-2].tag == INT &&"
-                       ++ "sp[-1].val <= sp[-2].val ? ATOM_false : ATOM_true"
+                       ++ "sp[-1].val <= sp[-2].val ? ATOM_true : ATOM_false"
         assert =
           case prim of
             PrimAdd -> "sp[-1].tag == INT && sp[-2].tag == INT"
