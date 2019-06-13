@@ -16,13 +16,15 @@ tokenParser = T.makeTokenParser $ emptyDef
   { commentLine      = "%"
   , nestedComments   = False
   , identStart       = letter
-  , identLetter      = alphaNum
+  , identLetter      = satisfy idLetter
   , opStart          = opLetter haskellStyle
-  , opLetter         = oneOf "+-*/=<>:|@^~?!"
+  , opLetter         = oneOf "+-*/=<>|@^~?!"
   , reservedNames    = ["case", "of", "end", "when", "if", "fun"]
   , caseSensitive    = True
   }
-  
+  where
+    idLetter c = isAlpha c || c == ':'
+
 -- Common tokens
 identifier = T.identifier tokenParser
 reservedOp = T.reservedOp tokenParser
@@ -39,6 +41,26 @@ charLiteral = T.charLiteral tokenParser
 stringLiteral = T.stringLiteral tokenParser
 lexeme = T.lexeme tokenParser
 whitespace = T.whiteSpace tokenParser
+
+-- Qualified identifier
+qualId :: Parser String
+qualId = do
+    id <- identifier
+    when (not (ok id)) $ do
+      unexpected ("malformed qualified name " ++ show id)
+    return id
+  where
+    ok id = length (filter (== ':') id) <= 1
+         && last id /= ':'
+         && null [() | (':', c) <- zip id (tail id), isUpper c]
+
+-- Unqualified identifier
+unqualId :: Parser String
+unqualId = do
+  id <- identifier
+  when (':' `elem` id) $ do
+    unexpected ("qualified name " ++ show id)
+  return id
 
 -- Lists
 list :: Parser Exp -> Parser Exp
@@ -66,7 +88,7 @@ ugpat :: Parser Exp
 ugpat = list ugpat
     <|> pure Tuple <*> braces (sepBy ugpat comma)
     <|> pure Int <*> integer
-    <|> pure Id <*> identifier
+    <|> pure Id <*> unqualId
 
 -- Expressions
 expBinOp op assoc = Infix (reservedOp op >> return apply2) assoc
@@ -115,7 +137,7 @@ patBind =
 -- Function application
 funApp :: Parser Exp
 funApp = do
-  id <- identifier
+  id <- qualId
   m <- optionMaybe (parens (sepBy expr comma))
   case m of
     Nothing -> return (Id id)
@@ -177,7 +199,7 @@ lambda = do
 -- Declarations
 decl :: Parser Decl
 decl = do
-  id <- identifier
+  id <- unqualId
   args <- parens (sepBy ugpat comma)
   g <- optionMaybe (reserved "when" *> expr)
   reservedOp "->"

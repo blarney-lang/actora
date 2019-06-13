@@ -1,5 +1,7 @@
 ifndef QUARTUS_ROOTDIR
-  $(error Please set QUARTUS_ROOTDIR)
+  ifneq ($(MAKECMDGOALS), clean)
+    $(error Please set QUARTUS_ROOTDIR)
+  endif
 endif
 
 .PHONY: all
