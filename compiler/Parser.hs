@@ -196,16 +196,48 @@ lambda = do
       body <- exprSeq
       return (args, g, body)
 
--- Declarations
-decl :: Parser Decl
-decl = do
+-- Function declarations
+funDecl :: Parser Decl
+funDecl = do
   id <- unqualId
   args <- parens (sepBy ugpat comma)
   g <- optionMaybe (reserved "when" *> expr)
   reservedOp "->"
   body <- exprSeq
   symbol "." <|> symbol ";"
-  return (id, args, g, body)
+  return (FunDecl id args g body)
+
+-- Module declarations
+importDecl :: Parser Decl
+importDecl = do
+  reserved "-import"
+  d <- parens (try
+         (do m <- unqualId
+             comma
+             ids <- brackets (sepBy unqualId comma)
+             return (ImportDecl m ids)
+         )
+        <|>
+         ( do m <- unqualId
+              return (ImportAllDecl m)
+         )
+       )
+  reservedOp "."
+  return d
+
+-- Module declarations
+exportDecl :: Parser Decl
+exportDecl = do
+  reserved "-export"
+  ids <- parens (brackets (sepBy unqualId comma))
+  reservedOp "."
+  return (ExportDecl ids)
+
+-- Declarations
+decl =
+      importDecl
+  <|> exportDecl
+  <|> funDecl
 
 -- Programs
 prog :: Parser [Decl]

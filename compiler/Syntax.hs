@@ -27,7 +27,17 @@ data Exp =
   | Fun Id Int
     deriving (Eq, Show)
 
-type Decl = (Id, [Exp], Guard, [Exp])
+data Decl =
+    ImportDecl Id [Id]
+  | ImportAllDecl Id
+  | ExportDecl [Id]
+  | FunDecl {
+      funName  :: Id
+    , funArgs  :: [Exp]
+    , funGuard :: Guard
+    , funBody  :: [Exp]
+    }
+  deriving Show
 
 -- Primitives
 -- ==========
@@ -62,4 +72,5 @@ instance Descend Exp where
 onExp :: (Exp -> Exp) -> [Decl] -> [Decl]
 onExp f ds = map exp ds
   where
-    exp (v, ps, g, es) = (v, map f ps, f `fmap` g, map f es)
+    exp (FunDecl v ps g es) = FunDecl v (map f ps) (f `fmap` g) (map f es)
+    exp other = other

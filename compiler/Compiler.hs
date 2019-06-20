@@ -25,7 +25,7 @@ desugarList = onExp list
 removeId :: [Decl] -> [Decl]
 removeId ds = onExp rem ds
   where
-    funs = foldr ins M.empty [(f, length args) | (f, args, g, rhs) <- ds]
+    funs = foldr ins M.empty [(f, length args) | FunDecl f args g rhs <- ds]
     ins (f, n) m =
       case M.lookup f m of
         Nothing -> M.insert f n m
@@ -79,15 +79,16 @@ lambdaLift ds = ds' ++ new
     (_, new, ds') = WF.runWF (mapM liftDecl ds) "\\" 0
 
     liftDecl :: Decl -> WF.WriterFresh Decl Decl
-    liftDecl (f, ps, g, rhs) = do
+    liftDecl (FunDecl f ps g rhs) = do
       rhs' <- mapM (bottomupM lift) rhs
-      return  (f, ps, g, rhs')
+      return  (FunDecl f ps g rhs')
+    liftDecl other = return other
 
     lift :: Exp -> WF.WriterFresh Decl Exp
     lift (Lambda eqns) = do
         f <- WF.fresh
         let vs = map Id (free (Lambda eqns))
-        WF.writeMany [(f, vs ++ ps, g, body) | (ps, g, body) <- eqns]
+        WF.writeMany [FunDecl f (vs ++ ps) g body | (ps, g, body) <- eqns]
         return (Apply (Id f) vs)
     lift e = return e
 
@@ -412,8 +413,9 @@ compile decls =
 
     -- Mapping from function name to list of equations
     eqnMap :: M.Map Id [([Exp], Guard, [Exp])]
-    eqnMap = M.fromListWith (flip (++)) [ (f, [(args, g, rhs)])
-                                        | (f, args, g, rhs) <- decls' ]
+    eqnMap = M.fromListWith (flip (++))
+      [ (f, [(args, g, rhs)])
+      | FunDecl f args g rhs <- decls' ]
 
     -- Compile a program
     prog :: Fresh [Instr]
