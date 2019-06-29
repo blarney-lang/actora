@@ -143,8 +143,8 @@ anon = ""
 -- Compilation
 -- ===========
 
-compile :: [Decl] -> [Instr]
-compile decls =
+compile :: Id -> [Decl] -> [Instr]
+compile modName decls =
     snd $ runFresh prog "@" 0
   where
     -- Pre-processing
@@ -421,7 +421,7 @@ compile decls =
     prog :: Fresh [Instr]
     prog = do 
       is <- concat <$> mapM fun (M.toList eqnMap)
-      return $ [CALL (InstrLabel "start") 0]
+      return $ [CALL (InstrLabel (modName ++ ":start")) 0]
             ++ [HALT]
             ++ builtinApply
             ++ is

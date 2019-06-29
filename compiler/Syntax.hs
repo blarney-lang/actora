@@ -28,9 +28,7 @@ data Exp =
     deriving (Eq, Show)
 
 data Decl =
-    ImportDecl Id [Id]
-  | ImportAllDecl Id
-  | ExportDecl [Id]
+    ImportDecl Id
   | FunDecl {
       funName  :: Id
     , funArgs  :: [Exp]

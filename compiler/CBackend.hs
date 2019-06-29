@@ -17,7 +17,8 @@ data CGenMode = BareGen_16 | BareGen_32 | CGen_32
 -- Baremetal C generator options
 data CGenOpts =
   CGenOpts {
-    genMode      :: CGenMode
+    topModName   :: String
+  , genMode      :: CGenMode
   , sourceProg   :: [Decl]
   , targetDir    :: String
   }
@@ -32,7 +33,7 @@ genC opts = do
         writeFile (targetDir opts ++ "/Makefile") stdMakefile
   where
     bytecode :: [Instr]
-    bytecode = compile (sourceProg opts)
+    bytecode = compile (topModName opts) (sourceProg opts)
 
     baremetal :: Bool
     baremetal =

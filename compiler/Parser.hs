@@ -211,33 +211,15 @@ funDecl = do
 importDecl :: Parser Decl
 importDecl = do
   reserved "-import"
-  d <- parens (try
-         (do m <- unqualId
-             comma
-             ids <- brackets (sepBy unqualId comma)
-             return (ImportDecl m ids)
-         )
-        <|>
-         ( do m <- unqualId
-              return (ImportAllDecl m)
-         )
-       )
+  d <- parens $ do
+         m <- unqualId
+         return (ImportDecl m)
   reservedOp "."
   return d
 
--- Module declarations
-exportDecl :: Parser Decl
-exportDecl = do
-  reserved "-export"
-  ids <- parens (brackets (sepBy unqualId comma))
-  reservedOp "."
-  return (ExportDecl ids)
-
 -- Declarations
-decl =
-      importDecl
-  <|> exportDecl
-  <|> funDecl
+decl = importDecl
+   <|> funDecl
 
 -- Programs
 prog :: Parser [Decl]

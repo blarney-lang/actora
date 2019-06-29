@@ -14,7 +14,7 @@ fi
 if [ "$1" == "regen" ]; then
   for PROG in $(ls *.erl); do
     BASE=$(basename $PROG .erl)
-    $ELITE -r $PROG > out/$BASE.out
+    $ELITE -r $BASE > out/$BASE.out
   done
   exit -1
 fi
@@ -25,7 +25,7 @@ rm -f *.got
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -r $PROG > $BASE.got
+  $ELITE -r $BASE > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else
@@ -44,7 +44,7 @@ mkdir tmp
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -c tmp/$BASE $PROG
+  $ELITE -c tmp/$BASE $BASE
   make -s -C tmp/$BASE
   tmp/$BASE/main > $BASE.got
   if cmp $BASE.got out/$BASE.out; then

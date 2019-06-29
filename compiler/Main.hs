@@ -7,10 +7,11 @@ import Control.Monad
 -- Local imports
 import Syntax
 import Parser
-import Compiler
+import Module
 import Bytecode
-import Semantics
+import Compiler
 import CBackend
+import Semantics
 
 -- Command-line flags
 data Flag =
@@ -43,18 +44,18 @@ getOptions argv =
       putStr (usageInfo header options)
       exitFailure
   where
-    header = "Usage: elite [OPTION...] FILE"
+    header = "Usage: elite [OPTION...] MODULE"
 
 main :: IO ()
 main = do
   args <- getArgs
   (flags, files) <- getOptions args
   case files of
-    [file] -> do
-      prog <- parseFile file
+    [modName] -> do
+      prog <- loadModule modName
       -- Evaluate using compiler + small-step semantics
       when (Run `elem` flags) $ do
-        putStrLn (run (compile prog))
+        putStrLn (run (compile modName prog))
         exitSuccess
       -- Generate C code
       case [dir | CompileToC dir <- flags] of
@@ -66,7 +67,8 @@ main = do
                 else CGen_32
           genC $
             CGenOpts {
-                sourceProg = prog
+                topModName = modName
+              , sourceProg = prog
               , targetDir  = dir
               , genMode    = mode
             }
@@ -75,5 +77,5 @@ main = do
           putStrLn "Expected on target directory for compilation"
           exitFailure
     other -> return ()
-  putStrLn "Expected single source file as argument"
+  putStrLn "Expected single module name as argument"
   exitFailure
