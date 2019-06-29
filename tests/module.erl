@@ -1,3 +1,3 @@
 -import(reverse).
 
-start() -> reverse(append([1], [2])).
+start() -> reverse([1] ++ [2]).

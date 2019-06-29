@@ -103,7 +103,8 @@ opTable =
   , [ expBinOp "*" AssocLeft, expBinOp "div" AssocLeft
     , expBinOp "band" AssocLeft, expBinOp "and" AssocLeft ]
   , [ expBinOp "+" AssocLeft, expBinOp "-" AssocLeft
-    , expBinOp "bor" AssocLeft,expBinOp "or" AssocLeft  ]
+    , expBinOp "bor" AssocLeft, expBinOp "or" AssocLeft  ]
+  , [ expBinOp "++" AssocRight ]
   , [ expBinOp "==" AssocNone, expBinOp "/=" AssocNone
     , expBinOp "<" AssocNone , expBinOp "<=" AssocNone
     , expBinOp ">" AssocNone , expBinOp ">=" AssocNone

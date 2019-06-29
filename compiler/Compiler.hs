@@ -92,6 +92,13 @@ lambdaLift ds = ds' ++ new
         return (Apply (Id f) vs)
     lift e = return e
 
+-- Replace "++" with "prelude:append"
+desugarAppend :: [Decl] -> [Decl]
+desugarAppend = onExp app
+  where
+    app (Fun "++" 2) = Fun "prelude:append" 2
+    app other = descend app other
+
 -- Stack environment
 -- =================
 
@@ -117,7 +124,7 @@ get env id =
 
 -- Replace variable on stack
 replace :: Env -> Id -> Id -> Env
-reaplce [] v w = error ("replace: unbound variable " ++ v)
+replace [] v w = error ("replace: unbound variable " ++ v)
 replace (s:ss) v w =
   case rep s of
     Nothing -> s : replace ss v w
@@ -148,7 +155,16 @@ compile modName decls =
     snd $ runFresh prog "@" 0
   where
     -- Pre-processing
-    decls' = removeId $ lambdaLift $ removeIf $ removeId $ desugarList decls
+    preprocess =
+        removeId
+      . lambdaLift
+      . removeIf
+      . removeId
+      . desugarList
+      . desugarAppend
+
+    -- Pre-processed program
+    decls' = preprocess decls
 
     -- Compile an expression
     exp :: Env -> Exp -> Fresh [Instr]
