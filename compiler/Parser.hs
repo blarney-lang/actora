@@ -71,10 +71,17 @@ list expr = try (do
                e2 <- expr
                symbol "]" 
                return (Cons e1 e2))
-        <|> do symbol "["
+        <|> try (do
+               symbol "["
                es <- sepBy expr comma
                symbol "]"
-               return (List es)
+               return (List es))
+        <|> do symbol "["
+               e <- expr
+               reservedOp "||"
+               stmts <- sepBy1 listCompStmt comma
+               symbol "]"
+               return (ListComp e stmts)
 
 -- Patterns
 pat :: Parser (Exp, Guard)
@@ -196,6 +203,17 @@ lambda = do
       reservedOp "->"
       body <- exprSeq
       return (args, g, body)
+
+-- List comprehesion statment
+listCompStmt :: Parser ListCompStmt
+listCompStmt =
+      try (do
+        p <- ugpat
+        reservedOp "<-"
+        e <- expr
+        return (ListCompBind p e))
+  <|> do e <- expr
+         return (ListCompGuard e)
 
 -- Function declarations
 funDecl :: Parser Decl

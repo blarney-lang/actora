@@ -20,11 +20,17 @@ data Exp =
   | Lambda [([Exp], Guard, [Exp])]
   | Int Integer
   | List [Exp]
+  | ListComp Exp [ListCompStmt]
   | Cons Exp Exp
   | Id Id
   | Atom Id
   | Var Id
   | Fun Id Int
+    deriving (Eq, Show)
+
+data ListCompStmt =
+    ListCompGuard Exp
+  | ListCompBind Exp Exp
     deriving (Eq, Show)
 
 data Decl =
@@ -59,6 +65,11 @@ instance Descend Exp where
   descendM f (Lambda eqns) = Lambda <$>
     sequence [ (,,) <$> mapM f ps <*> mapM f g <*> mapM f rhs
              | (ps, g, rhs) <- eqns ]
+  descendM f (ListComp e stmts) =
+      ListComp <$> f e <*> mapM listCompStmt stmts
+    where
+      listCompStmt (ListCompGuard e) = ListCompGuard <$> f e
+      listCompStmt (ListCompBind p e) = ListCompBind <$> f p <*> f e
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)
   descendM f (Fun g n) = return (Fun g n)

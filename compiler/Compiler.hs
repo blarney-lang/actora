@@ -55,6 +55,7 @@ removeIf ds = onExp rem ds
 
 -- Extract free variables from an expression
 free :: Exp -> [Id]
+free (Var v) = [v]
 free (Case e alts) = free e `union` foldr union []
   [ (maybe [] free g `union` freeSeq es) \\ free p
   | (p, g, es) <- alts ]
@@ -63,7 +64,12 @@ free (Lambda eqns) = foldr union []
       foldr union [] (map free ps)
   | (ps, g, es) <- eqns ]
 free (Bind p e) = free e
-free (Var v) = [v]
+free (ListComp e stmts) = freeStmts (stmts ++ [ListCompGuard e])
+  where
+    freeStmts [] = []
+    freeStmts (ListCompBind p e : rest) =
+      free e `union` (freeStmts rest \\ free p)
+    freeStmts (ListCompGuard e : rest) = free e `union` freeStmts rest
 free e = extract free e
 
 -- Extract free variables from an expression sequence
@@ -98,6 +104,22 @@ desugarAppend = onExp app
   where
     app (Fun "++" 2) = Fun "prelude:append" 2
     app other = descend app other
+
+-- Desugar list comprehensions
+desugarListComp :: [Decl] -> [Decl]
+desugarListComp = onExp listComp
+  where
+    listComp (ListComp e stmts) = comp stmts
+      where
+        comp [] = Cons e (Atom "[]")
+        comp (ListCompBind p gen : rest) =
+            Apply (Fun "prelude:concatMap" 2) [ok, gen]
+          where
+            ok = Lambda [ ([p], Nothing, [comp rest])
+                        , ([Var "Other"], Nothing, [Atom "[]"]) ]
+        comp (ListCompGuard g : rest) =
+          If [(g, [comp rest]), (Atom "true", [Atom "[]"])]
+    listComp other = descend listComp other
 
 -- Stack environment
 -- =================
@@ -159,6 +181,7 @@ compile modName decls =
         removeId
       . lambdaLift
       . removeIf
+      . desugarListComp
       . removeId
       . desugarList
       . desugarAppend
