@@ -21,6 +21,7 @@ data Exp =
   | Int Integer
   | List [Exp]
   | ListComp Exp [ListCompStmt]
+  | ListEnum Exp Exp
   | Cons Exp Exp
   | Id Id
   | Atom Id
@@ -70,6 +71,7 @@ instance Descend Exp where
     where
       listCompStmt (ListCompGuard e) = ListCompGuard <$> f e
       listCompStmt (ListCompBind p e) = ListCompBind <$> f p <*> f e
+  descendM f (ListEnum from to) = ListEnum <$> f from <*> f to
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)
   descendM f (Fun g n) = return (Fun g n)

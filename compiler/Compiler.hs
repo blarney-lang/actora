@@ -111,15 +111,33 @@ desugarListComp = onExp listComp
   where
     listComp (ListComp e stmts) = comp stmts
       where
-        comp [] = Cons e (Atom "[]")
+        comp [] = Cons (listComp e) (Atom "[]")
         comp (ListCompBind p gen : rest) =
-            Apply (Fun "prelude:concatMap" 2) [ok, gen]
+            Apply (Fun "prelude:concatMap" 2) [ok, listComp gen]
           where
             ok = Lambda [ ([p], Nothing, [comp rest])
                         , ([Var "Other"], Nothing, [Atom "[]"]) ]
         comp (ListCompGuard g : rest) =
-          If [(g, [comp rest]), (Atom "true", [Atom "[]"])]
+          If [(listComp g, [comp rest]), (Atom "true", [Atom "[]"])]
     listComp other = descend listComp other
+
+-- Desugar list enumerations
+desugarListEnum :: [Decl] -> [Decl]
+desugarListEnum = onExp enum
+  where
+    enum (ListEnum from to) =
+      Apply (Fun "prelude:enumFromTo" 2) [enum from, enum to]
+    enum other = descend enum other
+
+-- Desugar boolean operators
+desugarBool :: [Decl] -> [Decl]
+desugarBool = onExp bool
+  where
+    bool (Apply (Fun "and" 2) [x, y]) =
+      If [(bool x, [bool y]), (Atom "true", [Atom "false"])]
+    bool (Apply (Fun "or" 2) [x, y]) =
+      If [(bool x, [Atom "true"]), (Atom "true", [bool y])]
+    bool other = descend bool other
 
 -- Stack environment
 -- =================
@@ -184,7 +202,9 @@ compile modName decls =
       . desugarListComp
       . removeId
       . desugarList
+      . desugarListEnum
       . desugarAppend
+      . desugarBool
 
     -- Pre-processed program
     decls' = preprocess decls

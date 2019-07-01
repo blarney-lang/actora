@@ -19,7 +19,8 @@ tokenParser = T.makeTokenParser $ emptyDef
   , identLetter      = satisfy idLetter
   , opStart          = opLetter haskellStyle
   , opLetter         = oneOf "+-*/=<>|@^~?!"
-  , reservedNames    = ["case", "of", "end", "when", "if", "fun"]
+  , reservedNames    = ["case", "of", "end", "when", "if",
+                        "fun", "and", "or"]
   , caseSensitive    = True
   }
   where
@@ -76,6 +77,13 @@ list expr = try (do
                es <- sepBy expr comma
                symbol "]"
                return (List es))
+        <|> try (do
+              symbol "["
+              from <- expr
+              reservedOp ".."
+              to <- expr
+              symbol "]"
+              return (ListEnum from to))
         <|> do symbol "["
                e <- expr
                reservedOp "||"
@@ -108,14 +116,15 @@ opTable =
   [ [ expUnOp "bnot", expUnOp "not" ]
   , [ expBinOp ">>" AssocLeft, expBinOp "<<" AssocLeft]
   , [ expBinOp "*" AssocLeft, expBinOp "div" AssocLeft
-    , expBinOp "band" AssocLeft, expBinOp "and" AssocLeft ]
+    , expBinOp "band" AssocLeft ]
   , [ expBinOp "+" AssocLeft, expBinOp "-" AssocLeft
-    , expBinOp "bor" AssocLeft, expBinOp "or" AssocLeft  ]
+    , expBinOp "bor" AssocLeft ]
   , [ expBinOp "++" AssocRight ]
   , [ expBinOp "==" AssocNone, expBinOp "/=" AssocNone
     , expBinOp "<" AssocNone , expBinOp "<=" AssocNone
     , expBinOp ">" AssocNone , expBinOp ">=" AssocNone
     ]
+  , [ expBinOp "and" AssocRight, expBinOp "or" AssocRight]
   ]
 
 expr :: Parser Exp
