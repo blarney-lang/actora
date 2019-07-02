@@ -1,14 +1,18 @@
 module Compiler where
 
-import Syntax
-import Descend
-import Bytecode
+-- Standard imports
 import Data.Char
 import Data.List
 import Monad.Fresh
 import Control.Monad
 import qualified Data.Map as M
 import qualified Monad.WriterFresh as WF
+
+-- Local imports
+import Syntax
+import Descend
+import Module
+import Bytecode
 
 -- Preprocessing
 -- =============
@@ -86,14 +90,17 @@ lambdaLift ds = ds' ++ new
 
     liftDecl :: Decl -> WF.WriterFresh Decl Decl
     liftDecl (FunDecl f ps g rhs) = do
+      g' <- case g of
+              Nothing -> return g
+              Just e -> Just <$> bottomupM lift e
       rhs' <- mapM (bottomupM lift) rhs
-      return  (FunDecl f ps g rhs')
+      return  (FunDecl f ps g' rhs')
     liftDecl other = return other
 
     lift :: Exp -> WF.WriterFresh Decl Exp
     lift (Lambda eqns) = do
         f <- WF.fresh
-        let vs = map Id (free (Lambda eqns))
+        let vs = map Var (free (Lambda eqns))
         WF.writeMany [FunDecl f (vs ++ ps) g body | (ps, g, body) <- eqns]
         return (Apply (Id f) vs)
     lift e = return e
@@ -196,7 +203,8 @@ compile modName decls =
   where
     -- Pre-processing
     preprocess =
-        removeId
+        removeUnused modName
+      . removeId
       . lambdaLift
       . removeIf
       . desugarListComp
@@ -282,7 +290,7 @@ compile modName decls =
       where
         -- Compile case alternative, where subject is on top of stack
         caseAlt endLabel (p, g, body) = do
-           subjId <- fresh
+           subjId <- case p of { Var v -> return v; other -> fresh }
            fail <- fresh
            let failLabel = InstrLabel fail
            let env0 = newScope (push env [subjId])
@@ -410,7 +418,7 @@ compile modName decls =
       where
         -- Compile case alternative, where subject is on top of stack
         caseAlt (p, g, body) = do
-           subjId <- fresh
+           subjId <- case p of { Var v -> return v; other -> fresh }
            fail <- fresh
            let failLabel = InstrLabel fail
            let env0 = newScope (push env [subjId])

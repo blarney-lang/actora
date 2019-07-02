@@ -5,6 +5,8 @@ import Data.List
 import Data.Maybe
 import System.Directory
 import System.Environment
+import qualified Data.Set as S
+import qualified Data.Map as M
 
 -- Local imports
 import Syntax
@@ -51,7 +53,7 @@ loadModule modName = do
       let imported = removeDups importedMods
       -- Resolve names and remove unused definitions
       let context = [d | d@(FunDecl f args g body) <- ds ++ concat imported]
-      return $ removeUnused $
+      return $
         [ FunDecl (modName ++ ":" ++ n) args
                   (fmap (resolveExp context) guard)
                   (map (resolveExp context) body)
@@ -86,12 +88,22 @@ removeDups (m:ms) =
   where
     notDefined :: Id -> [Decl] -> Bool
     notDefined id ds = null [() | FunDecl f args g body <- ds, f == id]
-    
+
 -- Remove unused declarations
-removeUnused :: [Decl] -> [Decl]
-removeUnused prog =
-    [FunDecl f args g body | FunDecl f args g body <- prog,
-       f `elem` used || ":start" `isSuffixOf` f]
+removeUnused :: String -> [Decl] -> [Decl]
+removeUnused modName decls = 
+  [d | d@(FunDecl f args g body) <- decls, f `S.member` used]
   where
-    exprs = concat [catMaybes [g] ++ body | FunDecl f args g body <- prog]
-    used = [id | e <- exprs, Id id <- universe e]
+    prog = M.fromListWith (++) [(f, [d]) | d@(FunDecl f args g body) <- decls]
+    used = reachable S.empty [modName ++ ":start"]
+    reachable set [] = set
+    reachable set (f:fs)
+      | f `S.member` set = reachable set fs
+      | otherwise =
+        case M.lookup f prog of
+          Nothing -> reachable set fs
+          Just ds -> 
+            let exprs = concat [ catMaybes [g] ++ body
+                               | FunDecl f args g body <- ds ]
+                used = [id | e <- exprs, Fun id _ <- universe e]
+            in  reachable (S.insert f set) (nub used ++ fs)

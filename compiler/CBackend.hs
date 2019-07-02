@@ -101,7 +101,9 @@ genC opts = do
       
     defines :: [String]
     defines =
-         [ "#define INLINE inline __attribute__((always_inline))"
+         [ -- "#define HEAP_SIZE " ++ show defaultHeapSize
+           ""
+         , "#define INLINE inline __attribute__((always_inline))"
          , ""
          , "#define PTR_APP   1"
          , "#define PTR_CONS  3"
@@ -326,6 +328,7 @@ genC opts = do
       return
         [ "{"
         , "  uint32_t n = sp - rp[-1].sp;"
+        , "  if (hp+n >= (HEAP_SIZE/sizeof(TaggedWord))) gc();"
         , "  TaggedWord* addr = &heap[hp];"
         , "  for (uint32_t i = 0; i < n; i++) {"
         , "    heap[hp] = sp[-1];"
@@ -340,6 +343,8 @@ genC opts = do
     instr (STORE (Just n) k) =
       return $
            [ "{"
+           , "  if (hp+" ++ show n ++
+                      " >= (HEAP_SIZE/sizeof(TaggedWord))) gc();"
            , "  TaggedWord* addr = &heap[hp];"
            ]
         ++ concat [ [ "  heap[hp] = sp[-1];"
@@ -476,6 +481,8 @@ genC opts = do
       , "    front = gcCopy(back, front);"
       , "    back++;"
       , "  }"
+      , ""
+      , "  hp = front - heap2;"
       , ""
       , "  // Swap from-space and to-space"
       , "  TaggedWord* tmp;"

@@ -1,3 +1,9 @@
+# Runtime options
+C_STACK_SIZE = 1024
+RET_STACK_SIZE = 1024
+STACK_SIZE = 4096
+HEAP_SIZE = 28000
+
 # Binary utilities
 CC      = nios2-elf-gcc
 LD      = nios2-elf-ld
@@ -16,13 +22,17 @@ baremetal.o: baremetal.c
 	$(CC) $(CFLAGS) -Wall -c baremetal.c -o baremetal.o
 
 main.o: main.c
-	$(CC) $(CFLAGS) -Wall -c main.c -o main.o
+	$(CC) $(CFLAGS) -Wall -DHEAP_SIZE=$(HEAP_SIZE) -c main.c -o main.o
 
 entry.o: entry.S
 	$(CC) $(CFLAGS) -Wall -c -o entry.o entry.S
 
 main.elf: entry.o main.o baremetal.o link.ld
-	$(LD) $(LDFLAGS) -T link.ld -o main.elf entry.o main.o baremetal.o
+	$(LD) $(LDFLAGS) -T link.ld -o main.elf entry.o main.o baremetal.o \
+	  --defsym=C_STACK_SIZE=$(C_STACK_SIZE) \
+	  --defsym=RET_STACK_SIZE=$(RET_STACK_SIZE) \
+	  --defsym=STACK_SIZE=$(STACK_SIZE) \
+	  --defsym=HEAP_SIZE=$(HEAP_SIZE)
 
 .PHONY: download-elf
 download-elf: main.elf
