@@ -49,8 +49,10 @@ data Instr =
   | PUSH_RET InstrPtr
   | CALL InstrPtr Arity
   | ICALL
+  | IJUMP
   | COPY StackOffset
   | JUMP InstrPtr
+  | SLIDE PopAmount NumAtoms
   | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
   | LOAD (Maybe NumAtoms)
@@ -72,7 +74,8 @@ data BCond =
   | IsTuple NumAtoms
   | IsApplyPtr
   | IsApplyDone
-  | IsApplyOk
+  | IsApplyExact
+  | IsApplyOver
   | IsApplyUnder
   deriving (Eq, Ord, Show)
 

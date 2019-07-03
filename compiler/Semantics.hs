@@ -34,8 +34,10 @@ data Flags =
   , flagApplyPtr   :: Bool
     -- Application has reached normal form
   , flagApplyDone  :: Bool
-    -- Application has correct number of arguments or oversaturated
-  , flagApplyOk    :: Bool
+    -- Application has correct number of arguments
+  , flagApplyExact :: Bool
+    -- Application is oversaturated
+  , flagApplyOver  :: Bool
     -- Application is undersaturated
   , flagApplyUnder :: Bool
     -- Application has terminated
@@ -65,10 +67,17 @@ step (pc, i, h, s, r, fs) =
     ICALL ->
       let FUN (InstrAddr a) n : rest = s in
         (a, i, h, rest, (L.length s - n - 1, pc+1):r, fs)
+    -- Indirect jump
+    IJUMP ->
+      let FUN (InstrAddr a) n : rest = s in
+        (a, i, h, rest, r, fs)
     -- Push from stack
     COPY n -> (pc+1, i, h, (s!!n):s, r, fs)
     -- Direct unconditional jump
     JUMP (InstrAddr a) -> (a, i, h, s, r, fs)
+    -- Slide top stack elements
+    SLIDE pop n -> 
+      (pc+1, i, h, L.take n s ++ L.drop (n+pop) s, r, fs)
     -- Slide top stack elements, and jump to destination
     SLIDE_JUMP pop n (InstrAddr a) -> 
       (a, i, h, L.take n s ++ L.drop (n+pop) s, r, fs)
@@ -107,7 +116,8 @@ step (pc, i, h, s, r, fs) =
             IsTuple n -> not $ L.null [() | PTR PtrTuple m _ <- [top], n == m]
             IsApplyPtr -> flagApplyPtr fs
             IsApplyDone -> flagApplyDone fs
-            IsApplyOk -> flagApplyOk fs
+            IsApplyExact -> flagApplyExact fs
+            IsApplyOver -> flagApplyOver fs
             IsApplyUnder -> flagApplyUnder fs
     -- Query application on the stack
     CAN_APPLY -> (pc+1, i, h, s, r, fs')
@@ -116,11 +126,11 @@ step (pc, i, h, s, r, fs) =
         (slen, _):_ = r
         len = L.length s - slen
         isPtrApp = case top of {PTR PtrApp _ _ -> True; other -> False}
-        isFun0 = case top of {FUN _ n -> n == 0; other -> False}
         fs' = fs {
           flagApplyPtr = isPtrApp
-        , flagApplyDone = not isPtrApp && not isFun0 && len == 1
-        , flagApplyOk = case top of {FUN f n -> len > n; other -> False}
+        , flagApplyDone = not isPtrApp && len == 1
+        , flagApplyExact = case top of {FUN f n -> len == n+1; other -> False}
+        , flagApplyOver = case top of {FUN f n -> len > n+1; other -> False}
         , flagApplyUnder = case top of {FUN f n -> len <= n; other -> False}
         }
     -- Primitive
@@ -162,7 +172,8 @@ run instrs = exec initial
         flagLoadFail   = False
       , flagApplyPtr   = False
       , flagApplyDone  = False
-      , flagApplyOk    = False
+      , flagApplyExact = False
+      , flagApplyOver  = False
       , flagApplyUnder = False
       , flagHalt       = False
       }

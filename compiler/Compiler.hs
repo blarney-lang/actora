@@ -393,12 +393,31 @@ compile modName decls =
       (is1, env1) <- match (push env [v]) v p (InstrLabel "$bind_fail")
       is2 <- seq env1 rest k
       return (is0 ++ is1 ++ is2)
-    -- Tail call
+    -- Tail call of primitive function
     seq env [Apply (Fun f n) es] Nothing
-      | not (isPrim f) && n == length es = do
+      | isPrim f = 
+          if length es /= n
+          then error ("Call of primitive " ++ f ++ " with incorrect arity")
+          else do
+            is <- exp env (Apply (Fun f n) es)
+            return (is ++ [RETURN (1 + stackSize env)])
+    -- Tail call of known function, with correct number of args
+    seq env [Apply (Fun f n) es] Nothing
+      | n == length es = do
           is <- expList env es
           return $ is
                 ++ [SLIDE_JUMP (stackSize env) n (InstrLabel f)]
+    -- Tail call of known function, undersaturated
+    seq env [Apply (Fun f n) es] Nothing
+      | n > length es = do
+          is <- exp env (Apply (Fun f n) es)
+          return (is ++ [RETURN (1 + stackSize env)])
+    -- Other tail call
+    seq env [Apply e es] Nothing = do
+      is <- expList env (e:es)
+      return $ is 
+            ++ [SLIDE (stackSize env) (length (e:es))]
+            ++ [JUMP (InstrLabel "$apply")]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
@@ -506,10 +525,13 @@ compile modName decls =
       ,   LOAD Nothing
       ,   JUMP (InstrLabel "$apply")
       , LABEL "$apply_done"
-      ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_ok")
+      ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_exact")
       ,   RETURN 1
-      , LABEL "$apply_ok"
-      ,   BRANCH (Neg, IsApplyOk) 0 (InstrLabel "$apply_too_few")
+      , LABEL "$apply_exact"
+      ,   BRANCH (Neg, IsApplyExact) 0 (InstrLabel "$apply_too_many")
+      ,   IJUMP
+      , LABEL "$apply_too_many"
+      ,   BRANCH (Neg, IsApplyOver) 0 (InstrLabel "$apply_too_few")
       ,   ICALL
       ,   JUMP (InstrLabel "$apply")
       , LABEL "$apply_too_few"

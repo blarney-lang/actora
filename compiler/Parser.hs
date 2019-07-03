@@ -155,7 +155,7 @@ patBind =
 funApp :: Parser Exp
 funApp = do
   id <- qualId
-  m <- optionMaybe (parens (sepBy expr comma))
+  m <- optionMaybe (parens (sepBy1 expr comma))
   case m of
     Nothing -> return (Id id)
     Just args -> return (Apply (Id id) args)

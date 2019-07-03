@@ -214,11 +214,13 @@ genC opts = do
       ++ [ "  hp = 0;"
          , "  uint8_t flagApplyPtr;"
          , "  uint8_t flagApplyDone;"
-         , "  uint8_t flagApplyOk;"
+         , "  uint8_t flagApplyExact;"
+         , "  uint8_t flagApplyOver;"
          , "  uint8_t flagApplyUnder;"
          ]
       ++ map ("  " ++) (instrs bytecode)
       ++ [ "  _icall_fail:"
+         , "  _ijump_fail:"
          , "  _load_fail:"
          , "  _prim_fail:"
          , "  return -1;"
@@ -281,17 +283,25 @@ genC opts = do
         , "goto *((void*) ((uintptr_t) sp[0].val));"
         , mangle retLabel ++ ":"
         ]
+    instr IJUMP = do
+      return
+        [ "if (type(sp[-1].tag) != FUN) goto _ijump_fail;"
+        , "sp--;"
+        , "goto *((void*) ((uintptr_t) sp[0].val));"
+        ]
     instr (COPY n) =
       return
         [ "*sp = sp[-" ++ show (n+1) ++ "]; sp++;" ]
     instr (JUMP (InstrLabel label)) =
       return [ "goto " ++ mangle label ++ ";" ]
-    instr (SLIDE_JUMP pop n (InstrLabel label)) =
+    instr (SLIDE pop n) =
       return $
            [ "sp[-" ++ show (i+pop) ++ "] = " ++
                "sp[-" ++ show i ++ "];" | i <- reverse [1..n] ]
         ++ [ "sp -= " ++ show pop ++ ";"]
-        ++ [ "goto " ++ mangle label ++ ";" ]
+    instr (SLIDE_JUMP pop n (InstrLabel label)) = do
+      is <- instr (SLIDE pop n)
+      return (is ++ [ "goto " ++ mangle label ++ ";" ])
     instr (RETURN pop) =
       return
         [ "sp[-" ++ show pop ++ "] = sp[-1];"
@@ -375,7 +385,8 @@ genC opts = do
             IsTuple n    -> "type(sp[-1].tag) == PTR_TUPLE &&"
                          ++ "ptrLen(sp[-1].tag) == " ++ show n
             IsApplyPtr   -> "flagApplyPtr"
-            IsApplyOk    -> "flagApplyOk"
+            IsApplyExact -> "flagApplyExact"
+            IsApplyOver  -> "flagApplyOver"
             IsApplyDone  -> "flagApplyDone"
             IsApplyUnder -> "flagApplyUnder"
     instr CAN_APPLY =
@@ -383,12 +394,11 @@ genC opts = do
         [ "{"
         , "  uint32_t len = sp - rp[-1].sp;"
         , "  flagApplyPtr = type(sp[-1].tag) == PTR_APP;"
-        , "  flagApplyDone = type(sp[-1].tag) != PTR_APP &&"
-        , "                   !(type(sp[-1].tag) == FUN &&"
-        , "                       funArity(sp[-1].tag) == 0) &&"
-        , "                         len == 1;"
-        , "  flagApplyOk = type(sp[-1].tag) == FUN &&"
-        , "                  len > funArity(sp[-1].tag);"
+        , "  flagApplyDone = type(sp[-1].tag) != PTR_APP && len == 1;"
+        , "  flagApplyExact = type(sp[-1].tag) == FUN &&"
+        , "                     len == funArity(sp[-1].tag)+1;"
+        , "  flagApplyOver = type(sp[-1].tag) == FUN &&"
+        , "                    len > funArity(sp[-1].tag)+1;"
         , "  flagApplyUnder = type(sp[-1].tag) == FUN &&"
         , "                     len <= funArity(sp[-1].tag);"
         , "}"
