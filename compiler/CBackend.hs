@@ -101,9 +101,7 @@ genC opts = do
       
     defines :: [String]
     defines =
-         [ -- "#define HEAP_SIZE " ++ show defaultHeapSize
-           ""
-         , "#define INLINE inline __attribute__((always_inline))"
+         [ "#define INLINE inline __attribute__((always_inline))"
          , ""
          , "#define PTR_APP   1"
          , "#define PTR_CONS  3"
