@@ -3,6 +3,7 @@ module Parser (parseFile) where
 import Syntax
 import Data.Bits
 import Data.Char
+import Data.List
 import Data.Maybe
 import Control.Monad
 import Control.Applicative hiding (optional)
@@ -20,7 +21,7 @@ tokenParser = T.makeTokenParser $ emptyDef
   , opStart          = opLetter haskellStyle
   , opLetter         = oneOf "+-*/=<>|@^~?!"
   , reservedNames    = ["case", "of", "end", "when", "if",
-                        "fun", "and", "or"]
+                        "fun", "and", "or", "do", "return"]
   , caseSensitive    = True
   }
   where
@@ -131,7 +132,8 @@ expr :: Parser Exp
 expr = buildExpressionParser opTable expr1
 
 expr1 :: Parser Exp
-expr1 = caseExpr
+expr1 = doBlock
+    <|> caseExpr
     <|> ifExpr
     <|> patBind
     <|> funApp
@@ -223,6 +225,32 @@ listCompStmt =
         return (ListCompBind p e))
   <|> do e <- expr
          return (ListCompGuard e)
+
+-- Do notation
+doBlock :: Parser Exp
+doBlock = do
+  mod <- try (do
+           id <- qualId
+           guard (":do" `isSuffixOf` id)
+           return (takeWhile (/= ':') id ++ ":"))
+     <|> (reserved "do" >> return "")
+  stmts <- sepBy1 doStmt comma
+  reserved "end"
+  return (Do mod stmts)
+
+doStmt :: Parser DoStmt
+doStmt =
+      try (do
+        p <- ugpat
+        reservedOp "<-"
+        e <- expr
+        return (DoBind p e))
+  <|> try (do
+        reserved "return"
+        e <- expr
+        return (DoReturn e))
+  <|> do e <- expr
+         return (DoExpr e)
 
 -- Function declarations
 funDecl :: Parser Decl

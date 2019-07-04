@@ -22,6 +22,7 @@ data Exp =
   | List [Exp]
   | ListComp Exp [ListCompStmt]
   | ListEnum Exp Exp
+  | Do Id [DoStmt]
   | Cons Exp Exp
   | Id Id
   | Atom Id
@@ -32,6 +33,12 @@ data Exp =
 data ListCompStmt =
     ListCompGuard Exp
   | ListCompBind Exp Exp
+    deriving (Eq, Show)
+
+data DoStmt =
+    DoExpr Exp
+  | DoBind Exp Exp
+  | DoReturn Exp
     deriving (Eq, Show)
 
 data Decl =
@@ -71,6 +78,11 @@ instance Descend Exp where
     where
       listCompStmt (ListCompGuard e) = ListCompGuard <$> f e
       listCompStmt (ListCompBind p e) = ListCompBind <$> f p <*> f e
+  descendM f (Do mod stmts) = Do mod <$> mapM doStmt stmts
+    where
+      doStmt (DoExpr e) = DoExpr <$> f e
+      doStmt (DoBind p e) = DoBind <$> f p <*> f e
+      doStmt (DoReturn e) = DoReturn <$> f e
   descendM f (ListEnum from to) = ListEnum <$> f from <*> f to
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)

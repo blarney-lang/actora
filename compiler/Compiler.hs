@@ -68,12 +68,6 @@ free (Lambda eqns) = foldr union []
       foldr union [] (map free ps)
   | (ps, g, es) <- eqns ]
 free (Bind p e) = free e
-free (ListComp e stmts) = freeStmts (stmts ++ [ListCompGuard e])
-  where
-    freeStmts [] = []
-    freeStmts (ListCompBind p e : rest) =
-      free e `union` (freeStmts rest \\ free p)
-    freeStmts (ListCompGuard e : rest) = free e `union` freeStmts rest
 free e = extract free e
 
 -- Extract free variables from an expression sequence
