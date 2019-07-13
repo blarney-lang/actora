@@ -13,7 +13,8 @@ OBJCOPY = nios2-elf-objcopy
 CFLAGS  = -O2 -I. -static \
           -fvisibility=hidden -nostdlib -nostartfiles \
           -fsingle-precision-constant -fno-builtin-printf \
-          -ffp-contract=off -fno-builtin
+          -ffp-contract=off -fno-builtin \
+          -falign-functions=4
 
 .PHONY: all
 all: main.elf

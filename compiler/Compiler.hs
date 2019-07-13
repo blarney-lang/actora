@@ -14,8 +14,8 @@ import Descend
 import Module
 import Bytecode
 
--- Preprocessing
--- =============
+-- Transformation passes to core
+-- =============================
 
 -- List [e0, e1, ...] -> Cons e0 (Cons e1 ...)
 desugarList :: [Decl] -> [Decl]
@@ -68,6 +68,7 @@ free (Lambda eqns) = foldr union []
       foldr union [] (map free ps)
   | (ps, g, es) <- eqns ]
 free (Bind p e) = free e
+free (Cond e s0 s1) = free e `union` freeSeq s0 `union` freeSeq s1
 free e = extract free e
 
 -- Extract free variables from an expression sequence
@@ -94,10 +95,26 @@ lambdaLift ds = ds' ++ new
     lift :: Exp -> WF.WriterFresh Decl Exp
     lift (Lambda eqns) = do
         f <- WF.fresh
-        let vs = map Var (free (Lambda eqns))
-        WF.writeMany [FunDecl f (vs ++ ps) g body | (ps, g, body) <- eqns]
-        return (Apply (Id f) vs)
+        let vs = free (Lambda eqns)
+        WF.writeMany [ClosureDecl f vs ps g body | (ps, g, body) <- eqns]
+        let n = length vs + getArity eqns
+        return (Apply (Fun f n) (map Var vs))
     lift e = return e
+
+    getArity :: [([Exp], Guard, [Exp])] -> Int
+    getArity eqns
+      | all (== head ns) ns = head ns
+      | otherwise = error "Lambda equations have different arities"
+      where ns = [length ps | (ps, g, body) <- eqns]
+
+-- Replace unapplied functions with lambdas
+insertLambdas :: [Decl] -> [Decl]
+insertLambdas = onExp ins
+  where
+    ins (Apply f es) = Apply f (map ins es)
+    ins (Fun f n) = Lambda [(vs, Nothing, [Apply (Fun f n) vs])]
+      where vs = [Var ("V" ++ show i) | i <- [1..n]]
+    ins other = descend ins other
 
 -- Replace "++" with "prelude:append"
 desugarAppend :: [Decl] -> [Decl]
@@ -139,6 +156,20 @@ desugarBool = onExp bool
     bool (Apply (Fun "or" 2) [x, y]) =
       If [(bool x, [Atom "true"]), (Atom "true", [bool y])]
     bool other = descend bool other
+
+-- Return core E-lite program
+core :: String -> [Decl] -> [Decl]
+core modName =
+    lambdaLift
+  . insertLambdas
+  . removeUnused modName
+  . removeIf
+  . desugarListComp
+  . removeId
+  . desugarList
+  . desugarListEnum
+  . desugarAppend
+  . desugarBool
 
 -- Stack environment
 -- =================
@@ -195,21 +226,8 @@ compile :: Id -> [Decl] -> [Instr]
 compile modName decls =
     snd $ runFresh prog "@" 0
   where
-    -- Pre-processing
-    preprocess =
-        removeUnused modName
-      . removeId
-      . lambdaLift
-      . removeIf
-      . desugarListComp
-      . removeId
-      . desugarList
-      . desugarListEnum
-      . desugarAppend
-      . desugarBool
-
     -- Pre-processed program
-    decls' = preprocess decls
+    decls' = core modName decls
 
     -- Compile an expression
     exp :: Env -> Exp -> Fresh [Instr]
@@ -493,9 +511,11 @@ compile modName decls =
 
     -- Mapping from function name to list of equations
     eqnMap :: M.Map Id [([Exp], Guard, [Exp])]
-    eqnMap = M.fromListWith (flip (++))
+    eqnMap = M.fromListWith (flip (++)) $
       [ (f, [(args, g, rhs)])
-      | FunDecl f args g rhs <- decls' ]
+      | FunDecl f args g rhs <- decls' ] ++
+      [ (f, [(map Var vs ++ ps, g, rhs)])
+      | ClosureDecl f vs ps g rhs <- decls' ]
 
     -- Compile a program
     prog :: Fresh [Instr]

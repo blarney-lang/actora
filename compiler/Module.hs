@@ -78,6 +78,9 @@ loadModule modName = do
               other -> error ("Ambiguous call of function '" ++ name ++
                                 "' in module '" ++ modName ++ "'")
 
+    funName :: Decl -> Id
+    funName (FunDecl v ps g body) = v
+
 -- Remove duplicate declarations
 removeDups :: [[Decl]] -> [[Decl]]
 removeDups [] = []

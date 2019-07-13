@@ -43,12 +43,8 @@ data DoStmt =
 
 data Decl =
     ImportDecl Id
-  | FunDecl {
-      funName  :: Id
-    , funArgs  :: [Exp]
-    , funGuard :: Guard
-    , funBody  :: [Exp]
-    }
+  | FunDecl Id [Exp] Guard [Exp]
+  | ClosureDecl Id [Id] [Exp] Guard [Exp]
   deriving Show
 
 -- Primitives
@@ -95,5 +91,8 @@ instance Descend Exp where
 onExp :: (Exp -> Exp) -> [Decl] -> [Decl]
 onExp f ds = map exp ds
   where
-    exp (FunDecl v ps g es) = FunDecl v (map f ps) (f `fmap` g) (map f es)
+    exp (FunDecl v ps g es) =
+      FunDecl v (map f ps) (f `fmap` g) (map f es)
+    exp (ClosureDecl v vs ps g es) =
+      ClosureDecl v vs (map f ps) (f `fmap` g) (map f es)
     exp other = other
