@@ -51,24 +51,30 @@ genC opts = do
       (x1, code1) <- exp e1
       v <- fresh
       return (Var v, code0 ++ code1 ++
-        [ "Word " ++ v ++ " = makePtr(hp);"
-        , "hp[0] = makeCons();"
-        , "hp[1] = " ++ simple x0 ++ ";"
-        , "hp[2] = " ++ simple x1 ++ ";"
-        , "hp += 3;"
+        [ "Word " ++ v ++ ";"
+        , "{"
+        , "  Word* ptr = _alloc(3);"
+        , "  " ++ v ++ " = makePtr(ptr);"
+        , "  ptr[0] = makeCons();"
+        , "  ptr[1] = " ++ simple x0 ++ ";"
+        , "  ptr[2] = " ++ simple x1 ++ ";"
+        , "}"
         ])
     exp (Tuple es) = do
       let n = length es
       (xs, codes) <- unzip <$> mapM exp es
       v <- fresh
       return (Var v, concat codes ++
-        [ "Word " ++ v ++ " = makePtr(hp);"
-        , "hp[0] = makeTuple(" ++ show n ++ ");"
+        [ "Word " ++ v ++ ";"
+        , "{"
+        , "  Word* ptr = _alloc(" ++ show (1+n) ++ ");"
+        , "  " ++ v ++ " = makePtr(ptr);"
+        , "  ptr[0] = makeTuple(" ++ show n ++ ");"
         ] ++
-        [ "hp[" ++ show i ++ "] = " ++ simple x ++ ";"
-        | (x, i) <- zip xs [1..]
+        [ "  ptr[" ++ show i ++ "] = " ++ simple x ++ ";"
+               | (x, i) <- zip xs [1..]
         ] ++
-        [ "hp += " ++ show (n+1) ++ ";"])
+        [ "}" ])
     -- Application of primitive function
     exp (Apply (Fun f n) [e0, e1])
       | isPrim f = do
@@ -86,13 +92,17 @@ genC opts = do
           (xs, codes) <- unzip <$> mapM exp es
           v <- fresh
           return (Var v, concat codes ++
-            [ "Word " ++ v ++ " = makePtr(hp);"
-            , "hp[0] = makeApp(" ++ show (n-m) ++ ");"
-            , "hp[1] = (Word)" ++ mangle f ++ ";"
+            [ "Word " ++ v ++ ";"
+            , "{"
+            , "  Word* ptr = _alloc(" ++ show (2+m) ++ ");"
+            , "  " ++ v ++ " = makePtr(ptr);"
+            , "  ptr[0] = makeApp(" ++ show (n-m) ++ ", " ++ show m ++ ");"
+            , "  ptr[1] = makePtr((uint32_t*) " ++ mangle f ++ ");"
             ] ++
-            [ "hp[" ++ show i ++ "] = " ++ simple x ++ ";"
-            | (x, i) <- zip xs [2..] ] ++
-            [ "hp += " ++ show (n+2) ++ ";"])
+            [ "  ptr[" ++ show i ++ "] = " ++ simple x ++ ";"
+                   | (x, i) <- zip xs [2..]
+            ] ++
+            [ "}" ])
     -- Application of known function
     exp (Apply (Fun f n) es)
       | n == length es = do
@@ -116,10 +126,11 @@ genC opts = do
         , check ("isPtr(" ++ simple x ++ ")") "F"
         , "{"
         , "  Word* app = getPtr(" ++ simple x ++ ");"
-        , "  " ++ check ("(isApp(app[0]) && getLen(app[0]) == "
+        , "assert(isHdr(*app));"
+        , "  " ++ check ("(isApp(app[0]) && getAppArity(app[0]) == "
                            ++ show n ++ ")") "F"
         , "  Word (*f)(Word*," ++ funArgs ++ ") = " ++
-               "(Word (*)(Word*," ++ funArgs ++ ")) app[1];"
+               "(Word (*)(Word*," ++ funArgs ++ ")) getPtr(app[1]);"
         , "  " ++ v ++ " = f(app," ++
                     concat (intersperse "," [simple y | y <- ys]) ++ ");"
         , "}"
@@ -227,6 +238,7 @@ genC opts = do
         , "Word " ++ h ++ ", " ++ t ++ ";"
         , "{"
         , "  Word* ptr = getPtr(" ++ subj ++ ");"
+        , "assert(isHdr(*ptr));"
         , "  if (!isCons(*ptr)) " ++ fail
         , "  " ++ h ++ " = ptr[1]; " ++ t ++ " = ptr[2];"
         , "}"
@@ -240,6 +252,7 @@ genC opts = do
         , "Word " ++ concat (intersperse "," vs) ++ ";"
         , "{"
         , "  Word* ptr = getPtr(" ++ subj ++ ");"
+        , "assert(isHdr(*ptr));"
         , "  if (!isTuple(*ptr)) " ++ fail
         , "  " ++ concat [ v ++ " = ptr[" ++ show i ++ "]; "
                          | (v, i) <- zip vs [1..] ]
@@ -377,7 +390,7 @@ genC opts = do
       [ includes
       , helpers
       , atomNames
-      -- , garbageCollector
+      , collector
       , protos
       , funs
       , render
@@ -386,7 +399,7 @@ genC opts = do
 
     -- Default heap size
     defaultHeapSize :: Int
-    defaultHeapSize = 28000
+    defaultHeapSize = 32768
     
     -- Makefile for standard C generator
     stdMakefile :: String
@@ -395,13 +408,14 @@ genC opts = do
       , "main: main.c"
       , "\t@gcc -D HEAP_SIZE=$(HEAP_SIZE) \\"
       , "       -falign-functions=4 \\"
-      , "       -m32 -O3 main.c -o main"
+      , "       -m32 -O2 main.c -o main"
       ]
 
     includes :: [String]
     includes =
         [ "#include <stdint.h>"
         , "#include <stdbool.h>"
+        , "#include <setjmp.h>"
         ]
      ++ if genMode opts == Gen_NIOSII_32
         then
@@ -410,6 +424,7 @@ genC opts = do
         else
           [ "#include <stdio.h>"
           , "#include <stdlib.h>"
+          , "#include <assert.h>"
           ]
 
     helpers :: [String]
@@ -420,15 +435,17 @@ genC opts = do
       , "typedef uint32_t Hdr;"
       , ""
       , "Word* heap;"
-      , "Word* heap2;"
-      , "Word* hp;"
+      , "Word* heapEnd;"
+      , "Word* freePtr;"
+      , "uint32_t freeLen;"
+      , "Word* nextFreePtr;"
+      , "uint32_t* stackBase;"
+      , ""
+      , if genMode opts == Gen_NIOSII_32
+        then "extern uint32_t __e_heapBase;"
+        else ""
+      , ""
       ] ++
-      ( if genMode opts == Gen_NIOSII_32
-        then [ "extern uint32_t __e_heapBase;"
-             , "extern uint32_t __e_heap2Base;"
-             ]
-        else []
-      ) ++ [""] ++
       [ "#define ATOM_" ++ mangle atom ++ " " ++ show n
       | (atom, n) <- zip atoms [0..] ] ++
       [ ""
@@ -440,6 +457,7 @@ genC opts = do
       , "#define HDR_CONS 0"
       , "#define HDR_TUPLE 1"
       , "#define HDR_APP 2"
+      , "#define HDR_FREE 3"
       , ""
       , "INLINE bool isPtr(Word x) { return (x&3) == TAG_PTR; }"
       , "INLINE uint32_t* getPtr(Word x) " ++
@@ -447,16 +465,23 @@ genC opts = do
       , "INLINE Word makePtr(Word* x) " ++
           "{ return ((uint32_t) x) | TAG_PTR; }"
       , ""
-      , "INLINE bool isHdr (Word x) { return (x&3) == TAG_HDR; }"
-      , "INLINE bool isCons(Hdr x) { return ((x>>2)&3) == HDR_CONS; }"
-      , "INLINE bool isTuple(Hdr x) { return ((x>>2)&3) == HDR_TUPLE; }"
-      , "INLINE bool isApp(Hdr x) { return ((x>>2)&3) == HDR_APP; }"
-      , "INLINE uint32_t getLen(Hdr x) { return x >> 4; }"
-      , "INLINE Hdr makeCons() { return (2 << 4) | (HDR_CONS << 2); }"
+      , "INLINE bool isHdr (Hdr x) { return (x&3) == TAG_HDR; }"
+      , "INLINE bool isCons(Hdr x) { return ((x>>3)&3) == HDR_CONS; }"
+      , "INLINE bool isTuple(Hdr x) { return ((x>>3)&3) == HDR_TUPLE; }"
+      , "INLINE bool isApp(Hdr x) { return ((x>>3)&3) == HDR_APP; }"
+      , "INLINE Hdr makeCons() { return (2 << 5) | (HDR_CONS << 3); }"
       , "INLINE Hdr makeTuple(uint32_t len) "
-          ++ "{ return (len<<4) | (HDR_TUPLE<<2); }"
-      , "INLINE Hdr makeApp(uint32_t len) "
-          ++ "{ return (len<<4) | (HDR_APP<<2); }"
+          ++ "{ return (len<<5) | (HDR_TUPLE<<3); }"
+      , "INLINE Hdr makeApp(uint32_t arity, uint32_t len) "
+          ++ "{ return (arity<<16)| (len<<5) | (HDR_APP<<3); }"
+      , "INLINE Hdr makeFree(uint32_t len) "
+          ++ "{ return (len<<5) | (HDR_FREE<<3); }"
+      , "INLINE uint32_t getLen(Hdr x) { return x >> 5; }"
+      , "INLINE uint32_t getAppLen(Hdr x) { return (x&0xffff) >> 5; }"
+      , "INLINE uint32_t getAppArity(Hdr x) { return x >> 16; }"
+      , "INLINE uint32_t isMarked(Hdr x) { return (x>>2)&1; }"
+      , "INLINE Hdr markHdr(Hdr x) { return x|4; }"
+      , "INLINE Hdr unmarkHdr(Hdr x) { return x & ~4; }"
       , ""
       , "INLINE bool isInt(Word x) { return (x&3) == TAG_INT; }"
       , "INLINE int32_t getInt(Word x) { return (int32_t) (x >> 2); }"
@@ -470,6 +495,31 @@ genC opts = do
       , "  putchar(errorCode);"
       , "  putchar('\\n');"
       , "  while (1);"
+      , "}"
+      , ""
+      , "uint32_t _gc(); "
+      , ""
+      , "// Slow path for heap allocation"
+      , "Word* _allocSlow(uint32_t len);"
+      , ""
+      , "// Fast path for heap allocation"
+      , "INLINE Word* _alloc(uint32_t len) {"
+      , "  if (len <= freeLen) {"
+      , "    Word* p = freePtr;"
+      , "    freeLen -= len;"
+      , "    freePtr += len;"
+      , "    return p;"
+      , "  } else return _allocSlow(len);"
+      , "}"
+      , ""
+      , "Word* _allocSlow(uint32_t len) {"
+      , "  if (nextFreePtr == 0) _gc();"
+      , "  else {"
+      , "    freePtr = nextFreePtr;"
+      , "    freeLen = getLen(freePtr[0]);"
+      , "    nextFreePtr = getPtr(freePtr[1]);"
+      , "  }"
+      , "  return _alloc(len);"
       , "}"
       , ""
       , "INLINE Word add(Word x, Word y) {"
@@ -529,7 +579,7 @@ genC opts = do
 
     render :: [String]
     render =
-      [ "void render(Word w) {"
+      [ "void _render(Word w) {"
       , if genMode opts == Gen_NIOSII_32
           then "  if (isInt(w)) printf(\"0x%x\", getInt(w));"
           else "  if (isInt(w)) printf(\"%d\", getInt(w));"
@@ -538,16 +588,16 @@ genC opts = do
       , "    Word* app = getPtr(w);"
       , "    if (isCons(app[0])) {"
       , "      printf(\"[\");"
-      , "      render(app[1]);"
+      , "      _render(app[1]);"
       , "      printf(\"|\");"
-      , "      render(app[2]);"
+      , "      _render(app[2]);"
       , "      printf(\"]\");"
       , "    }"
       , "    if (isTuple(app[0])) {"
       , "      uint32_t n = getLen(app[0]);"
       , "      printf(\"{\");"
       , "      for (uint32_t i = 0; i < n; i++) {"
-      , "        render(app[i+1]);"
+      , "        _render(app[i+1]);"
       , "        if (i < n-1) printf(\", \");"
       , "      }"
       , "      printf(\"}\");"
@@ -558,24 +608,118 @@ genC opts = do
       , ""
       ]
 
+    collector :: [String]
+    collector =
+      [ "// Mark all reachable heap nodes"
+      , "void _mark(Word w) {"
+      , "  if (isPtr(w)) {"
+      , "    Word* p = getPtr(w);"
+      , "    if (p >= heap && p < heapEnd && isHdr(p[0])) {"
+      , "      if (isMarked(*p)) return;"
+      , "      *p = markHdr(*p);"
+      , "      if (isApp(*p)) {"
+      , "        for (uint32_t i = 0; i < getAppLen(*p); i++) _mark(p[2+i]);"
+      , "      } else {"
+      , "        for (uint32_t i = 0; i < getLen(*p); i++) _mark(p[1+i]);"
+      , "      }"
+      , "    }"
+      , "  }"
+      , "}"
+      , ""
+      , "// Reclaim space and unmark all nodes"
+      , "void _sweep() {"
+      , "  Word first[2];"
+      , "  // Pointer to header of current heap node"
+      , "  Word* hdr = first;"
+      , "  // Currently in free-space region?"
+      , "  bool inFreeRegion = false;"
+      , "  // Length of current free-space region"
+      , "  uint32_t len = 0;"
+      , "  // Iterate over heap"
+      , "  Word* p = heap;"
+      , "  while (p < heapEnd) {"
+      , "    if (isHdr(p[0]) && isMarked(p[0])) {"
+      , "      uint32_t n = isApp(p[0]) ? 2+getAppLen(p[0]) : 1+getLen(p[0]);"
+      , "      p[0] = unmarkHdr(p[0]);"
+      , "      p += n;"
+      , "      inFreeRegion = false;"
+      , "    }"
+      , "    else {"
+      , "      if (inFreeRegion == false) {"
+      , "        // Check that there space to start a new free region"
+      , "        if ((p+1 == heapEnd) || (isHdr(p[1]) && isMarked(p[1]))) {"
+      , "          p[0] = makeInt(0);"
+      , "          p++;"
+      , "        }"
+      , "        else {"
+      , "          inFreeRegion = true;"
+      , "          hdr[0] = makeFree(len);"
+      , "          hdr[1] = makePtr(p);"
+      , "          hdr = p;"
+      , "          len = 2;"
+      , "          p += 2;"
+      , "        }"
+      , "      }"
+      , "      else {"
+      , "        p[0] = makeInt(0);"
+      , "        len++;"
+      , "        p++;"
+      , "      }"
+      , "    }"
+      , "  }"
+      , "  // Terminate the free-space list"
+      , "  hdr[0] = makeFree(len);"
+      , "  hdr[1] = makePtr(0);"
+      , "  // Intialise heap allocator state"
+      , "  freePtr = heap;"
+      , "  freeLen = getLen(first[0]);"
+      , "  nextFreePtr = getPtr(first[1]);"
+      , "}"
+      , ""
+      , "uint32_t _gc()"
+      , "{"
+      , "  // Flush registers onto stack"
+      , "  jmp_buf regs;"
+      , "  uint32_t* regsPtr = (uint32_t*) &regs;"
+      , "  for (uint32_t i = 0; i < sizeof(regs)/4; i++) regsPtr[i] = 0;"
+      , "  setjmp(regs);"
+      , ""
+      , "  // Mark phase"
+      , "  register uint32_t* sp asm (\"sp\");"
+      , "  Word* s = sp;"
+      , "  while (s <= stackBase) {"
+      , "    _mark(*s);"
+      , "    s++;"
+      , "  }"
+      , ""
+      , "  // Sweep phase"
+      , "  _sweep();"
+      , "  return 0;"
+      , "}"
+      , ""
+      ]
+
     main :: [String]
     main =
          [ "int main() {"
+         , "  register uint32_t* sp asm (\"sp\");"
+         , "  stackBase = sp;"
          ]
       ++ ( if genMode opts == Gen_NIOSII_32
            then
              [ "  heap = (Word*) &__e_heapBase;"
-             , "  heap2 = (Word*) &__e_heap2Base;"
              ]
            else
              [ "  heap = (Word*) malloc(HEAP_SIZE);"
-             , "  heap2 = (Word*) malloc(HEAP_SIZE);"
              ]
          )
-      ++ [ "  hp = heap;"
+      ++ [ "  heapEnd = heap + (HEAP_SIZE/4);"
+         , "  freePtr = heap;"
+         , "  freeLen = (HEAP_SIZE/4);"
+         , "  nextFreePtr = 0;"
          , "  Word result = " ++
                 mangle (topModName opts ++ ":" ++ "start") ++ "();"
-         , "  render(result);"
+         , "  _render(result);"
          , "  printf(\"\\n\");"
          , "  return 0;"
          , "}"
