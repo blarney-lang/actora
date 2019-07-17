@@ -25,7 +25,7 @@ options =
   [ Option ['r'] [] (NoArg Run)
       "Run using small-step semantics"
   , Option ['c'] [] (ReqArg CompileToC "DIR")
-      "Compile to 32-bit C"
+      "Compile to 32-bit C (experimental)"
   , Option [] ["niosii"] (NoArg CompileToNIOSII)
        "C backend: target NIOS-II"
   ]
