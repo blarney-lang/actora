@@ -21,7 +21,7 @@ tokenParser = T.makeTokenParser $ emptyDef
   , opStart          = opLetter haskellStyle
   , opLetter         = oneOf "+-*/=<>|@^~?!"
   , reservedNames    = ["case", "of", "end", "when", "if",
-                        "fun", "and", "or", "do", "return"]
+                        "fun", "and", "or", "do"]
   , caseSensitive    = True
   }
   where
@@ -157,7 +157,7 @@ patBind =
 funApp :: Parser Exp
 funApp = do
   id <- qualId
-  m <- optionMaybe (parens (sepBy1 expr comma))
+  m <- optionMaybe (parens (sepBy expr comma))
   case m of
     Nothing -> return (Id id)
     Just args -> return (Apply (Id id) args)
@@ -245,10 +245,6 @@ doStmt =
         reservedOp "<-"
         e <- expr
         return (DoBind p e))
-  <|> try (do
-        reserved "return"
-        e <- expr
-        return (DoReturn e))
   <|> do e <- expr
          return (DoExpr e)
 

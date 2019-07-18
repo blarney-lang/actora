@@ -139,6 +139,24 @@ desugarListComp = onExp listComp
           If [(listComp g, [comp rest]), (Atom "true", [Atom "[]"])]
     listComp other = descend listComp other
 
+-- Desugar do notation
+desugarDoNotation :: [Decl] -> [Decl]
+desugarDoNotation = onExp desugarDo
+  where
+    desugarDo (Do m stmts) = trDo stmts
+      where
+        trDo [DoExpr e] = desugarDo e
+        trDo (DoBind p e : rest) =
+             Apply (Fun (qualify "mbind") 2) [desugarDo e, ok]
+           where
+            ok = Lambda [ ([p], Nothing, [trDo rest])
+                        , ([Var "Other"], Nothing,
+                             [Apply (Fun (qualify "mfail") 0) []]) ]
+        trDo (DoExpr e : rest) = trDo (DoBind (Var "_Unused") e : rest)
+
+        qualify id = if null m then id else (m ++ ":" ++ id)
+    desugarDo other = descend desugarDo other
+
 -- Desugar list enumerations
 desugarListEnum :: [Decl] -> [Decl]
 desugarListEnum = onExp enum
@@ -163,7 +181,9 @@ core modName =
     lambdaLift
   . insertLambdas
   . removeUnused modName
+  . resolve modName
   . removeIf
+  . desugarDoNotation
   . desugarListComp
   . removeId
   . desugarList
