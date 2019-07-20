@@ -380,7 +380,7 @@ genC opts = do
 
     -- Assert condition
     check cond errCode =
-     "if (!" ++ cond ++ ") _error('" ++ errCode ++ "');" 
+     "if (!(" ++ cond ++ ")) _error('" ++ errCode ++ "');" 
 
     ccode :: String
     ccode = unlines $ concat

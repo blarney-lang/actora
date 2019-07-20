@@ -25,7 +25,7 @@ tokenParser = T.makeTokenParser $ emptyDef
   , caseSensitive    = True
   }
   where
-    idLetter c = isAlpha c || c == ':'
+    idLetter c = isAlphaNum c || c == ':'
 
 -- Common tokens
 identifier = T.identifier tokenParser
