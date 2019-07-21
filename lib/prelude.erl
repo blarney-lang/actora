@@ -18,6 +18,11 @@ lengthPlus([], Acc) -> Acc.
 
 length(Xs) -> lengthPlus(Xs, 0).
 
+sumPlus([X|Xs], Acc) -> sumPlus(Xs, X+Acc);
+sumPlus([], Acc) -> Acc.
+
+sum(Xs) -> sumPlus(Xs, 0).
+
 enumFromTo(From, To) when From > To -> [];
 enumFromTo(From, To) -> [From|enumFromTo(From+1, To)].
 
