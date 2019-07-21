@@ -1,6 +1,4 @@
-start() -> length(nqueens(11)).
-
-%start() -> length(nqueens(8)).
+start() -> length(nqueens(12)).
 
 nqueens(NQ) -> gen(NQ, NQ).
 

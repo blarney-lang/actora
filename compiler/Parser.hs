@@ -114,7 +114,7 @@ expUnOp op = Prefix (reservedOp op >> return apply1)
   where apply1 a = Apply (Fun op 1) [a]
 
 opTable =
-  [ [ expUnOp "bnot", expUnOp "not" ]
+  [ [ expUnOp "bnot" ]
   , [ expBinOp ">>" AssocLeft, expBinOp "<<" AssocLeft]
   , [ expBinOp "*" AssocLeft, expBinOp "div" AssocLeft
     , expBinOp "band" AssocLeft ]

@@ -41,7 +41,6 @@ safe(X, D, [Q|L]) ->
         safe(X, D+1, L);
 safe(X, D, []) -> true.
 
-%start() -> length(gen(8, 8, fun (X, Xs) -> [X|Xs] end, [])).
 start() -> 
   F = gen(12, 12),
   F(fun (X, Xs) -> 1+Xs end, 0).

@@ -173,12 +173,14 @@ genC opts = do
           guardCode <- guard g fail
           (body', bodyCode) <- seq body
           return (
+            ["{"] ++
             matchCode ++
             guardCode ++
             bodyCode ++
               [ v ++ " = " ++ simple body' ++ ";"
               , "goto " ++ endLabel ++ ";"
               , failLabel ++ ": ;"
+              , "}"
               ])
 
     -- Compile a simple expression
@@ -251,6 +253,7 @@ genC opts = do
         , "{"
         , "  Word* ptr = getPtr(" ++ subj ++ ");"
         , "  if (!isTuple(*ptr)) " ++ fail
+        , "  if (getLen(*ptr) != " ++ show n ++ ")" ++ fail
         , "  " ++ concat [ v ++ " = ptr[" ++ show i ++ "]; "
                          | (v, i) <- zip vs [1..] ]
         , "}"
@@ -396,7 +399,7 @@ genC opts = do
 
     -- Default heap size
     defaultHeapSize :: Int
-    defaultHeapSize = 32768
+    defaultHeapSize = 65536
     
     -- Makefile for standard C generator
     stdMakefile :: String

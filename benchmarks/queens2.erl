@@ -1,3 +1,5 @@
+% Solution to N queens problem using success/fail continuations
+
 range(From, To, SK, FK) ->
   if From > To -> FK;
      true -> SK(From, range(From+1, To, SK, FK))
@@ -20,5 +22,4 @@ safe(X, D, [Q|L]) ->
         safe(X, D+1, L);
 safe(X, D, []) -> true.
 
-%start() -> length(gen(8, 8, fun (X, Xs) -> [X|Xs] end, [])).
 start() -> gen(12, 12, fun (X, Xs) -> 1+Xs end, 0).

@@ -1,3 +1,5 @@
+% Building and flattening Braun trees
+
 insert(X, empty) -> {branch, X, empty, empty};
 insert(X, {branch, Y, T0, T1}) ->
   {branch, X, insert(Y, T1), T0}.
