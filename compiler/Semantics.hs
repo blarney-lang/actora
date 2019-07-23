@@ -23,25 +23,13 @@ type Heap = Seq [Atom]
 type Stack = [Atom]
 
 -- Return stack
-type ReturnStack = [(StackOffset, InstrAddr)]
+type ReturnStack = [InstrAddr]
 
 -- Flag register
 data Flags =
   Flags {
-    -- Number of items loaded did not match number requested
-    flagLoadFail   :: Bool
-    -- Trying to apply a pointer
-  , flagApplyPtr   :: Bool
-    -- Application has reached normal form
-  , flagApplyDone  :: Bool
-    -- Application has correct number of arguments
-  , flagApplyExact :: Bool
-    -- Application is oversaturated
-  , flagApplyOver  :: Bool
-    -- Application is undersaturated
-  , flagApplyUnder :: Bool
     -- Application has terminated
-  , flagHalt       :: Bool
+    flagHalt :: Bool
   }
   deriving Show
 
@@ -59,14 +47,12 @@ step (pc, i, h, s, r, fs) =
   case i A.! pc of
     -- Push onto stack
     PUSH a -> (pc+1, i, h, a:s, r, fs)
-    -- Push onto return stack
-    PUSH_RET (InstrAddr a) -> (pc+1, i, h, s, (L.length s, a):r, fs)
     -- Function call
-    CALL (InstrAddr a) n -> (a, i, h, s, (L.length s - n, pc+1):r, fs)
+    CALL (InstrAddr a) n -> (a, i, h, s, (pc+1):r, fs)
     -- Indirect function call
     ICALL ->
       let FUN (InstrAddr a) n : rest = s in
-        (a, i, h, rest, (L.length s - n - 1, pc+1):r, fs)
+        (a, i, h, rest, (pc+1):r, fs)
     -- Indirect jump
     IJUMP ->
       let FUN (InstrAddr a) n : rest = s in
@@ -83,23 +69,17 @@ step (pc, i, h, s, r, fs) =
       (a, i, h, L.take n s ++ L.drop (n+pop) s, r, fs)
     -- Return
     RETURN pop ->
-      let (sp, a):rest = r in
+      let a:rest = r in
         (a, i, h, head s : L.drop pop s, rest, fs)
     -- Load construction from the heap onto the stack
-    LOAD n -> (pc+1, i, h, s', r, fs)
+    LOAD pop -> (pc+1, i, h, s', r, fs)
       where
-        -- The number inside n should always equal m, so isn't
-        -- really needed.  However, n is statically known, so
-        -- can allow better code gen.
         PTR k m p : rest = s
         Just as = h S.!? p
-        s' = if isNothing n then as ++ rest else as ++ s
+        s' = if pop then as ++ tail s else as ++ s
     -- Store construction to the heap
-    STORE n k -> (pc+1, i, h |> L.take len s, PTR k len p:L.drop len s, r, fs)
+    STORE n k -> (pc+1, i, h |> L.take n s, PTR k n p:L.drop n s, r, fs)
       where
-        len = case n of
-                Nothing -> L.length s - fst (head r)
-                Just m -> m
         p = S.length h
     -- Conditional branch
     BRANCH (polarity, op) pop (InstrAddr a) -> (pc', i, h, s', r, fs)
@@ -114,25 +94,7 @@ step (pc, i, h, s, r, fs) =
             IsInt i -> top == INT i
             IsCons -> not $ L.null [() | PTR PtrCons _ _ <- [top]]
             IsTuple n -> not $ L.null [() | PTR PtrTuple m _ <- [top], n == m]
-            IsApplyPtr -> flagApplyPtr fs
-            IsApplyDone -> flagApplyDone fs
-            IsApplyExact -> flagApplyExact fs
-            IsApplyOver -> flagApplyOver fs
-            IsApplyUnder -> flagApplyUnder fs
-    -- Query application on the stack
-    CAN_APPLY -> (pc+1, i, h, s, r, fs')
-      where
-        top:_ = s
-        (slen, _):_ = r
-        len = L.length s - slen
-        isPtrApp = case top of {PTR PtrApp _ _ -> True; other -> False}
-        fs' = fs {
-          flagApplyPtr = isPtrApp
-        , flagApplyDone = not isPtrApp && len == 1
-        , flagApplyExact = case top of {FUN f n -> len == n+1; other -> False}
-        , flagApplyOver = case top of {FUN f n -> len > n+1; other -> False}
-        , flagApplyUnder = case top of {FUN f n -> len <= n; other -> False}
-        }
+            IsApp n -> not $ L.null [() | PTR (PtrApp m) _ _ <- [top], n == m]
     -- Primitive
     PRIM prim -> (pc+1, i, h, res : L.drop n s, r, fs)
       where
@@ -169,13 +131,7 @@ run instrs = exec initial
     -- Initial state of flags register
     flags = 
       Flags {
-        flagLoadFail   = False
-      , flagApplyPtr   = False
-      , flagApplyDone  = False
-      , flagApplyExact = False
-      , flagApplyOver  = False
-      , flagApplyUnder = False
-      , flagHalt       = False
+        flagHalt = False
       }
 
     -- Initial state of abstract machine
@@ -190,8 +146,9 @@ run instrs = exec initial
     render h (FUN f n) = "FUN"
     render h (PTR k n p) =
       case k of
-        PtrApp -> render h (head atoms) ++ "(" ++ concat (L.intersperse ", "
-                    (L.map (render h) (tail atoms))) ++ ")"
+        PtrApp n -> render h (head atoms) ++ "/" ++ show n ++
+                      "(" ++ concat (L.intersperse ", "
+                        (L.map (render h) (tail atoms))) ++ ")"
         PtrCons -> "[" ++ render h (atoms !! 0) ++ "|"
                        ++ render h (atoms !! 1) ++ "]"
         PtrTuple -> "{" ++ concat (L.intersperse ", "

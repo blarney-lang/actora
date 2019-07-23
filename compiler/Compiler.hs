@@ -98,7 +98,7 @@ lambdaLift ds = ds' ++ new
         let vs = free (Lambda eqns)
         WF.writeMany [ClosureDecl f vs ps g body | (ps, g, body) <- eqns]
         let n = length vs + getArity eqns
-        return (Apply (Fun f n) (map Var vs))
+        return (Apply (Closure f n) (map Var vs))
     lift e = return e
 
     getArity :: [([Exp], Guard, [Exp])] -> Int
@@ -261,15 +261,17 @@ compile modName decls =
       return [PUSH (INT (fromInteger i))]
     exp env (Fun f n) =
      return [PUSH (FUN (InstrLabel f) n)]
+    exp env (Closure f n) =
+     return [PUSH (FUN (InstrLabel f) n)]
     exp env (Var v) =
      return [COPY (get env v)]
     -- Lists and tuples
     exp env (Cons e0 e1) = do
       is <- expList env [e0, e1]
-      return (is ++ [STORE (Just 2) PtrCons])
+      return (is ++ [STORE 2 PtrCons])
     exp env (Tuple es) = do
       is <- expList env es
-      return (is ++ [STORE (Just (length es)) PtrTuple])
+      return (is ++ [STORE (length es) PtrTuple])
     -- Application of primitive function
     exp env (Apply (Fun "+" n) [e0, Int i]) =
       prim env (PrimAddImm (fromInteger i)) [e0]
@@ -290,18 +292,21 @@ compile modName decls =
       | n == length es = do
           is <- expList env es
           return (is ++ [CALL (InstrLabel f) (length es)])
-    -- Under-saturated application of known function
-    exp env (Apply (Fun f n) es)
-      | length es < n = do
-          is <- expList env (Fun f n : es)
-          return (is ++ [STORE (Just (1 + length es)) PtrApp])
-    -- Over-saturated application of known function
-    -- Or application of unknown function
+      | otherwise = error ("Function " ++ f ++ " applied to " ++
+          " wrong number of arguments")
+    -- Closure creation
+    exp env (Apply (Closure f n) es) = do
+      is <- expList env (Closure f n : es)
+      let arity = n - length es
+      return (is ++ [STORE (1 + length es) (PtrApp arity)])
+    -- Application of unknown function
     exp env (Apply f es) = do
       is <- expList env (f:es)
       ret <- fresh
-      return ([PUSH_RET (InstrLabel ret)] ++ is ++
-                [JUMP (InstrLabel "$apply"), LABEL ret])
+      return (is ++
+        [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
+        , LOAD True, ICALL
+        ])
     -- Conditional expression
     exp env (Cond c e0 e1) = do
       elseLabel <- fresh
@@ -396,7 +401,7 @@ compile modName decls =
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
       let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail
-                , LOAD (Just 2) ]
+                , LOAD False ]
       v0 <- fresh
       v1 <- fresh
       (is2, env1) <- match (push env0 [v0, v1]) v0 p0 fail
@@ -406,7 +411,7 @@ compile modName decls =
       let n = length ps
       let (is0, env0) = copy env v
       let is1 = [ BRANCH (Neg, IsTuple n) (scopeSize env0) fail
-                , LOAD (Just n) ]
+                , LOAD False ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
                   (instrs, env') <- match env w p fail
@@ -442,17 +447,20 @@ compile modName decls =
           is <- expList env es
           return $ is
                 ++ [SLIDE_JUMP (stackSize env) n (InstrLabel f)]
-    -- Tail call of known function, undersaturated
-    seq env [Apply (Fun f n) es] Nothing
-      | n > length es = do
-          is <- exp env (Apply (Fun f n) es)
-          return (is ++ [RETURN (1 + stackSize env)])
-    -- Other tail call
+      | otherwise = error ("Function " ++ f ++ " applied to " ++
+                      "wrong number of arguments")
+    -- Tail call of closure
+    seq env [Apply (Closure f n) es] Nothing = do
+      is <- exp env (Apply (Closure f n) es)
+      return (is ++ [RETURN (1 + stackSize env)])
+    -- Tail call of unknown function
     seq env [Apply e es] Nothing = do
       is <- expList env (e:es)
       return $ is 
-            ++ [SLIDE (stackSize env) (length (e:es))]
-            ++ [JUMP (InstrLabel "$apply")]
+            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
+               , SLIDE (stackSize env) (length (e:es))
+               , LOAD True, IJUMP
+               ]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
@@ -546,33 +554,8 @@ compile modName decls =
       is <- concat <$> mapM fun (M.toList eqnMap)
       return $ [CALL (InstrLabel (modName ++ ":start")) 0]
             ++ [HALT]
-            ++ builtinApply
             ++ is
             ++ [LABEL "$bind_fail"]
             ++ [LABEL "$case_fail"]
             ++ [LABEL "$eqn_fail"]
             ++ [LABEL "$apply_fail"]
-
-    -- To implement curried function application
-    builtinApply :: [Instr]
-    builtinApply =
-      [ LABEL "$apply"
-      ,   CAN_APPLY
-      ,   BRANCH (Neg, IsApplyPtr) 0 (InstrLabel "$apply_done")
-      ,   LOAD Nothing
-      ,   JUMP (InstrLabel "$apply")
-      , LABEL "$apply_done"
-      ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_exact")
-      ,   RETURN 1
-      , LABEL "$apply_exact"
-      ,   BRANCH (Neg, IsApplyExact) 0 (InstrLabel "$apply_too_many")
-      ,   IJUMP
-      , LABEL "$apply_too_many"
-      ,   BRANCH (Neg, IsApplyOver) 0 (InstrLabel "$apply_too_few")
-      ,   ICALL
-      ,   JUMP (InstrLabel "$apply")
-      , LABEL "$apply_too_few"
-      ,   BRANCH (Neg, IsApplyUnder) 0 (InstrLabel "$apply_fail")
-      ,   STORE Nothing PtrApp
-      ,   RETURN 1
-      ]

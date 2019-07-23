@@ -28,6 +28,7 @@ data Exp =
   | Atom Id
   | Var Id
   | Fun Id Int
+  | Closure Id Int
     deriving (Eq, Show)
 
 data ListCompStmt =
@@ -81,6 +82,7 @@ instance Descend Exp where
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)
   descendM f (Fun g n) = return (Fun g n)
+  descendM f (Closure g n) = return (Closure g n)
   descendM f (Atom a) = return (Atom a)
   descendM f (Var v) = return (Var v)
   descendM f (List es) = List <$> mapM f es

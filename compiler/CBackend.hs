@@ -86,23 +86,22 @@ genC opts = do
                 prim f (simple x0) (simple x1) ++ ";"
             ])
     -- Closure creation
-    exp (Apply (Fun f n) es)
-      | head f == '\\' = do
-          let m = length es
-          (xs, codes) <- unzip <$> mapM exp es
-          v <- fresh
-          return (Var v, concat codes ++
-            [ "Word " ++ v ++ ";"
-            , "{"
-            , "  Word* ptr = _alloc(" ++ show (2+m) ++ ");"
-            , "  " ++ v ++ " = makePtr(ptr);"
-            , "  ptr[0] = makeApp(" ++ show (n-m) ++ ", " ++ show m ++ ");"
-            , "  ptr[1] = makePtr((uint32_t*) " ++ mangle f ++ ");"
-            ] ++
-            [ "  ptr[" ++ show i ++ "] = " ++ simple x ++ ";"
-                   | (x, i) <- zip xs [2..]
-            ] ++
-            [ "}" ])
+    exp (Apply (Closure f n) es) = do
+      let m = length es
+      (xs, codes) <- unzip <$> mapM exp es
+      v <- fresh
+      return (Var v, concat codes ++
+        [ "Word " ++ v ++ ";"
+        , "{"
+        , "  Word* ptr = _alloc(" ++ show (2+m) ++ ");"
+        , "  " ++ v ++ " = makePtr(ptr);"
+        , "  ptr[0] = makeApp(" ++ show (n-m) ++ ", " ++ show m ++ ");"
+        , "  ptr[1] = makePtr((uint32_t*) " ++ mangle f ++ ");"
+        ] ++
+        [ "  ptr[" ++ show i ++ "] = " ++ simple x ++ ";"
+               | (x, i) <- zip xs [2..]
+        ] ++
+        [ "}" ])
     -- Application of known function
     exp (Apply (Fun f n) es)
       | n == length es = do
