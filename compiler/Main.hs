@@ -17,9 +17,7 @@ import Semantics
 data Flag =
     Run
   | CompileToC String
-  | CompileToBareC16
-  | CompileToBareC32
-  | CompileToC32
+  | CompileToNIOSII
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -27,13 +25,9 @@ options =
   [ Option ['r'] [] (NoArg Run)
       "Run using small-step semantics"
   , Option ['c'] [] (ReqArg CompileToC "DIR")
-      "Compile to C"
-  , Option [] ["c32"] (NoArg CompileToC32)
-      "C backend: 32-bit standard C (default)"
-  , Option [] ["b16"] (NoArg CompileToBareC16)
-      "C backend: 16-bit baremetal"
-  , Option [] ["b32"] (NoArg CompileToBareC32)
-      "C backend: 32-bit baremetal"
+      "Compile to 32-bit C (experimental)"
+  , Option [] ["niosii"] (NoArg CompileToNIOSII)
+       "C backend: target NIOS-II"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -62,9 +56,8 @@ main = do
         [] -> return ()
         [dir] -> do
           let mode = 
-                if CompileToBareC16 `elem` flags then BareGen_16
-                else if CompileToBareC32 `elem` flags then BareGen_32
-                else CGen_32
+                if CompileToNIOSII `elem` flags then Gen_NIOSII_32
+                else Gen_C_32
           genC $
             CGenOpts {
                 topModName = modName

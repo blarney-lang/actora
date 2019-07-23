@@ -14,8 +14,8 @@ import Descend
 import Module
 import Bytecode
 
--- Preprocessing
--- =============
+-- Transformation passes to core
+-- =============================
 
 -- List [e0, e1, ...] -> Cons e0 (Cons e1 ...)
 desugarList :: [Decl] -> [Decl]
@@ -68,6 +68,7 @@ free (Lambda eqns) = foldr union []
       foldr union [] (map free ps)
   | (ps, g, es) <- eqns ]
 free (Bind p e) = free e
+free (Cond e s0 s1) = free e `union` freeSeq s0 `union` freeSeq s1
 free e = extract free e
 
 -- Extract free variables from an expression sequence
@@ -94,10 +95,26 @@ lambdaLift ds = ds' ++ new
     lift :: Exp -> WF.WriterFresh Decl Exp
     lift (Lambda eqns) = do
         f <- WF.fresh
-        let vs = map Var (free (Lambda eqns))
-        WF.writeMany [FunDecl f (vs ++ ps) g body | (ps, g, body) <- eqns]
-        return (Apply (Id f) vs)
+        let vs = free (Lambda eqns)
+        WF.writeMany [ClosureDecl f vs ps g body | (ps, g, body) <- eqns]
+        let n = length vs + getArity eqns
+        return (Apply (Closure f n) (map Var vs))
     lift e = return e
+
+    getArity :: [([Exp], Guard, [Exp])] -> Int
+    getArity eqns
+      | all (== head ns) ns = head ns
+      | otherwise = error "Lambda equations have different arities"
+      where ns = [length ps | (ps, g, body) <- eqns]
+
+-- Replace unapplied functions with lambdas
+insertLambdas :: [Decl] -> [Decl]
+insertLambdas = onExp ins
+  where
+    ins (Apply f es) = Apply f (map ins es)
+    ins (Fun f n) = Lambda [(vs, Nothing, [Apply (Fun f n) vs])]
+      where vs = [Var ("V" ++ show i) | i <- [1..n]]
+    ins other = descend ins other
 
 -- Replace "++" with "prelude:append"
 desugarAppend :: [Decl] -> [Decl]
@@ -122,6 +139,27 @@ desugarListComp = onExp listComp
           If [(listComp g, [comp rest]), (Atom "true", [Atom "[]"])]
     listComp other = descend listComp other
 
+-- Desugar do notation
+desugarDoNotation :: [Decl] -> [Decl]
+desugarDoNotation = onExp desugarDo
+  where
+    desugarDo (Do m stmts) = trDo stmts
+      where
+        trDo [DoExpr e] = desugarDo e
+        trDo (DoBind p e : rest) =
+             Apply (Fun (qualify "mbind") 2) [desugarDo e, ok]
+           where
+             ok = case p of
+                    Var v -> Lambda [([p], Nothing, [trDo rest])]
+                    other ->
+                      Lambda [ ([p], Nothing, [trDo rest])
+                             , ([Var "Other"], Nothing,
+                                  [Apply (Fun (qualify "mfail") 0) []]) ]
+        trDo (DoExpr e : rest) = trDo (DoBind (Var "_Unused") e : rest)
+
+        qualify id = if null m then id else (m ++ ":" ++ id)
+    desugarDo other = descend desugarDo other
+
 -- Desugar list enumerations
 desugarListEnum :: [Decl] -> [Decl]
 desugarListEnum = onExp enum
@@ -139,6 +177,22 @@ desugarBool = onExp bool
     bool (Apply (Fun "or" 2) [x, y]) =
       If [(bool x, [Atom "true"]), (Atom "true", [bool y])]
     bool other = descend bool other
+
+-- Return core E-lite program
+core :: String -> [Decl] -> [Decl]
+core modName =
+    lambdaLift
+  . insertLambdas
+  . removeUnused modName
+  . resolve modName
+  . removeIf
+  . desugarDoNotation
+  . desugarListComp
+  . removeId
+  . desugarList
+  . desugarListEnum
+  . desugarAppend
+  . desugarBool
 
 -- Stack environment
 -- =================
@@ -195,21 +249,8 @@ compile :: Id -> [Decl] -> [Instr]
 compile modName decls =
     snd $ runFresh prog "@" 0
   where
-    -- Pre-processing
-    preprocess =
-        removeUnused modName
-      . removeId
-      . lambdaLift
-      . removeIf
-      . desugarListComp
-      . removeId
-      . desugarList
-      . desugarListEnum
-      . desugarAppend
-      . desugarBool
-
     -- Pre-processed program
-    decls' = preprocess decls
+    decls' = core modName decls
 
     -- Compile an expression
     exp :: Env -> Exp -> Fresh [Instr]
@@ -220,15 +261,17 @@ compile modName decls =
       return [PUSH (INT (fromInteger i))]
     exp env (Fun f n) =
      return [PUSH (FUN (InstrLabel f) n)]
+    exp env (Closure f n) =
+     return [PUSH (FUN (InstrLabel f) n)]
     exp env (Var v) =
      return [COPY (get env v)]
     -- Lists and tuples
     exp env (Cons e0 e1) = do
       is <- expList env [e0, e1]
-      return (is ++ [STORE (Just 2) PtrCons])
+      return (is ++ [STORE 2 PtrCons])
     exp env (Tuple es) = do
       is <- expList env es
-      return (is ++ [STORE (Just (length es)) PtrTuple])
+      return (is ++ [STORE (length es) PtrTuple])
     -- Application of primitive function
     exp env (Apply (Fun "+" n) [e0, Int i]) =
       prim env (PrimAddImm (fromInteger i)) [e0]
@@ -249,18 +292,21 @@ compile modName decls =
       | n == length es = do
           is <- expList env es
           return (is ++ [CALL (InstrLabel f) (length es)])
-    -- Under-saturated application of known function
-    exp env (Apply (Fun f n) es)
-      | length es < n = do
-          is <- expList env (Fun f n : es)
-          return (is ++ [STORE (Just (1 + length es)) PtrApp])
-    -- Over-saturated application of known function
-    -- Or application of unknown function
+      | otherwise = error ("Function " ++ f ++ " applied to " ++
+          " wrong number of arguments")
+    -- Closure creation
+    exp env (Apply (Closure f n) es) = do
+      is <- expList env (Closure f n : es)
+      let arity = n - length es
+      return (is ++ [STORE (1 + length es) (PtrApp arity)])
+    -- Application of unknown function
     exp env (Apply f es) = do
       is <- expList env (f:es)
       ret <- fresh
-      return ([PUSH_RET (InstrLabel ret)] ++ is ++
-                [JUMP (InstrLabel "$apply"), LABEL ret])
+      return (is ++
+        [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
+        , LOAD True, ICALL
+        ])
     -- Conditional expression
     exp env (Cond c e0 e1) = do
       elseLabel <- fresh
@@ -355,7 +401,7 @@ compile modName decls =
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
       let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail
-                , LOAD (Just 2) ]
+                , LOAD False ]
       v0 <- fresh
       v1 <- fresh
       (is2, env1) <- match (push env0 [v0, v1]) v0 p0 fail
@@ -365,7 +411,7 @@ compile modName decls =
       let n = length ps
       let (is0, env0) = copy env v
       let is1 = [ BRANCH (Neg, IsTuple n) (scopeSize env0) fail
-                , LOAD (Just n) ]
+                , LOAD False ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
                   (instrs, env') <- match env w p fail
@@ -401,17 +447,20 @@ compile modName decls =
           is <- expList env es
           return $ is
                 ++ [SLIDE_JUMP (stackSize env) n (InstrLabel f)]
-    -- Tail call of known function, undersaturated
-    seq env [Apply (Fun f n) es] Nothing
-      | n > length es = do
-          is <- exp env (Apply (Fun f n) es)
-          return (is ++ [RETURN (1 + stackSize env)])
-    -- Other tail call
+      | otherwise = error ("Function " ++ f ++ " applied to " ++
+                      "wrong number of arguments")
+    -- Tail call of closure
+    seq env [Apply (Closure f n) es] Nothing = do
+      is <- exp env (Apply (Closure f n) es)
+      return (is ++ [RETURN (1 + stackSize env)])
+    -- Tail call of unknown function
     seq env [Apply e es] Nothing = do
       is <- expList env (e:es)
       return $ is 
-            ++ [SLIDE (stackSize env) (length (e:es))]
-            ++ [JUMP (InstrLabel "$apply")]
+            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
+               , SLIDE (stackSize env) (length (e:es))
+               , LOAD True, IJUMP
+               ]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
       elseLabel <- fresh
@@ -493,9 +542,11 @@ compile modName decls =
 
     -- Mapping from function name to list of equations
     eqnMap :: M.Map Id [([Exp], Guard, [Exp])]
-    eqnMap = M.fromListWith (flip (++))
+    eqnMap = M.fromListWith (flip (++)) $
       [ (f, [(args, g, rhs)])
-      | FunDecl f args g rhs <- decls' ]
+      | FunDecl f args g rhs <- decls' ] ++
+      [ (f, [(map Var vs ++ ps, g, rhs)])
+      | ClosureDecl f vs ps g rhs <- decls' ]
 
     -- Compile a program
     prog :: Fresh [Instr]
@@ -503,33 +554,8 @@ compile modName decls =
       is <- concat <$> mapM fun (M.toList eqnMap)
       return $ [CALL (InstrLabel (modName ++ ":start")) 0]
             ++ [HALT]
-            ++ builtinApply
             ++ is
             ++ [LABEL "$bind_fail"]
             ++ [LABEL "$case_fail"]
             ++ [LABEL "$eqn_fail"]
             ++ [LABEL "$apply_fail"]
-
-    -- To implement curried function application
-    builtinApply :: [Instr]
-    builtinApply =
-      [ LABEL "$apply"
-      ,   CAN_APPLY
-      ,   BRANCH (Neg, IsApplyPtr) 0 (InstrLabel "$apply_done")
-      ,   LOAD Nothing
-      ,   JUMP (InstrLabel "$apply")
-      , LABEL "$apply_done"
-      ,   BRANCH (Neg, IsApplyDone) 0 (InstrLabel "$apply_exact")
-      ,   RETURN 1
-      , LABEL "$apply_exact"
-      ,   BRANCH (Neg, IsApplyExact) 0 (InstrLabel "$apply_too_many")
-      ,   IJUMP
-      , LABEL "$apply_too_many"
-      ,   BRANCH (Neg, IsApplyOver) 0 (InstrLabel "$apply_too_few")
-      ,   ICALL
-      ,   JUMP (InstrLabel "$apply")
-      , LABEL "$apply_too_few"
-      ,   BRANCH (Neg, IsApplyUnder) 0 (InstrLabel "$apply_fail")
-      ,   STORE Nothing PtrApp
-      ,   RETURN 1
-      ]

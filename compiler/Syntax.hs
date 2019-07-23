@@ -28,6 +28,7 @@ data Exp =
   | Atom Id
   | Var Id
   | Fun Id Int
+  | Closure Id Int
     deriving (Eq, Show)
 
 data ListCompStmt =
@@ -38,17 +39,12 @@ data ListCompStmt =
 data DoStmt =
     DoExpr Exp
   | DoBind Exp Exp
-  | DoReturn Exp
     deriving (Eq, Show)
 
 data Decl =
     ImportDecl Id
-  | FunDecl {
-      funName  :: Id
-    , funArgs  :: [Exp]
-    , funGuard :: Guard
-    , funBody  :: [Exp]
-    }
+  | FunDecl Id [Exp] Guard [Exp]
+  | ClosureDecl Id [Id] [Exp] Guard [Exp]
   deriving Show
 
 -- Primitives
@@ -82,11 +78,11 @@ instance Descend Exp where
     where
       doStmt (DoExpr e) = DoExpr <$> f e
       doStmt (DoBind p e) = DoBind <$> f p <*> f e
-      doStmt (DoReturn e) = DoReturn <$> f e
   descendM f (ListEnum from to) = ListEnum <$> f from <*> f to
   descendM f (Id x) = return (Id x)
   descendM f (Int i) = return (Int i)
   descendM f (Fun g n) = return (Fun g n)
+  descendM f (Closure g n) = return (Closure g n)
   descendM f (Atom a) = return (Atom a)
   descendM f (Var v) = return (Var v)
   descendM f (List es) = List <$> mapM f es
@@ -95,5 +91,8 @@ instance Descend Exp where
 onExp :: (Exp -> Exp) -> [Decl] -> [Decl]
 onExp f ds = map exp ds
   where
-    exp (FunDecl v ps g es) = FunDecl v (map f ps) (f `fmap` g) (map f es)
+    exp (FunDecl v ps g es) =
+      FunDecl v (map f ps) (f `fmap` g) (map f es)
+    exp (ClosureDecl v vs ps g es) =
+      ClosureDecl v vs (map f ps) (f `fmap` g) (map f es)
     exp other = other

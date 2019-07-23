@@ -24,7 +24,7 @@ loadModule modName = do
     let prog' = if modName == "prelude" then prog
                 else ImportDecl "prelude" : prog
     -- Perform name resolution
-    resolve prog'
+    importAndResolve prog'
   where
     -- Module search paths
     searchPaths :: IO [String]
@@ -43,8 +43,8 @@ loadModule modName = do
         else locate rest
 
     -- Name resolution
-    resolve :: [Decl] -> IO [Decl]
-    resolve ds = do
+    importAndResolve :: [Decl] -> IO [Decl]
+    importAndResolve ds = do
       -- Determine imports
       let imports = [m | ImportDecl m <- ds]
       -- Recurse
@@ -55,28 +55,37 @@ loadModule modName = do
       let context = [d | d@(FunDecl f args g body) <- ds ++ concat imported]
       return $
         [ FunDecl (modName ++ ":" ++ n) args
-                  (fmap (resolveExp context) guard)
-                  (map (resolveExp context) body)
+                  (fmap (resolveExp modName context) guard)
+                  (map (resolveExp modName context) body)
         | FunDecl n args guard body <- ds ] ++ concat imported
 
-    -- Name resolution pass for expressions
-    resolveExp :: [Decl] -> Exp -> Exp
-    resolveExp ds (Id id) = Id (resolveName ds id)
-    resolveExp ds other = descend (resolveExp ds) other
+-- Name resolution pass for declarations
+resolve :: Id -> [Decl] -> [Decl]
+resolve m ds = onExp (resolveExp m ds) ds
 
-    -- Prepend module name to identifiers, where not already specified
-    resolveName :: [Decl] -> Id -> Id
-    resolveName ds name
-      | ':' `elem` name = name
-      | otherwise  =
-          if name `elem` [funName d | d <- ds]
-          then modName ++ ":" ++ name
-          else
-            case nub [f | f <- map funName ds, (':':name) `isSuffixOf` f] of
-              [] -> name
-              [f] -> f
-              other -> error ("Ambiguous call of function '" ++ name ++
-                                "' in module '" ++ modName ++ "'")
+-- Name resolution pass for expressions
+resolveExp :: Id -> [Decl] -> Exp -> Exp
+resolveExp m ds (Fun f n) = Fun (resolveName m ds f) n
+resolveExp m ds (Id id) = Id (resolveName m ds id)
+resolveExp m ds other = descend (resolveExp m ds) other
+
+-- Prepend module name to identifiers, where not already specified
+resolveName :: Id -> [Decl] -> Id -> Id
+resolveName m ds name
+  | ':' `elem` name = name
+  | otherwise  =
+      if name `elem` [funName d | d <- ds]
+      then m ++ ":" ++ name
+      else
+        case nub [f | f <- map funName ds, (':':name) `isSuffixOf` f] of
+          [] -> name
+          [f] -> f
+          other -> error ("Ambiguous call of function '" ++ name ++
+                            "' in module '" ++ m ++ "'")
+  where
+    funName :: Decl -> Id
+    funName (FunDecl v ps g body) = v
+    funName (ClosureDecl v env ps g body) = v
 
 -- Remove duplicate declarations
 removeDups :: [[Decl]] -> [[Decl]]

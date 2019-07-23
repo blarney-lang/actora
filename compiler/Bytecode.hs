@@ -27,7 +27,7 @@ data Atom =
   deriving (Eq, Ord, Show)
 
 -- Pointers can point to partial applications, tuples, and cons cells
-data PtrKind = PtrApp | PtrTuple | PtrCons
+data PtrKind = PtrApp Arity | PtrTuple | PtrCons
   deriving (Eq, Ord, Show)
 
 -- Primitive operators
@@ -46,20 +46,19 @@ data Prim =
 data Instr =
     LABEL String
   | PUSH Atom
-  | PUSH_RET InstrPtr
   | CALL InstrPtr Arity
   | ICALL
-  | IJUMP
   | COPY StackOffset
   | JUMP InstrPtr
+  | IJUMP
   | SLIDE PopAmount NumAtoms
   | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
-  | LOAD (Maybe NumAtoms)
-  | STORE (Maybe NumAtoms) PtrKind
+  | LOAD Bool
+  | STORE NumAtoms PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
-  | CAN_APPLY
   | PRIM Prim
+  | APPLY NumAtoms
   | HALT
   deriving Show
 
@@ -72,11 +71,7 @@ data BCond =
   | IsInt Int
   | IsCons
   | IsTuple NumAtoms
-  | IsApplyPtr
-  | IsApplyDone
-  | IsApplyExact
-  | IsApplyOver
-  | IsApplyUnder
+  | IsApp Arity
   deriving (Eq, Ord, Show)
 
 -- Replace labels with addresses
@@ -104,7 +99,6 @@ link instrs = L.map replace (dropLabels instrs)
 
     -- Replace labels with addresses
     replace (PUSH (FUN (InstrLabel s) n)) = PUSH (FUN (resolve s) n)
-    replace (PUSH_RET (InstrLabel s)) = PUSH_RET (resolve s)
     replace (CALL (InstrLabel s) n) = CALL (resolve s) n
     replace (SLIDE_JUMP n m (InstrLabel s)) = SLIDE_JUMP n m (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
