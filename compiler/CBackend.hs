@@ -414,7 +414,6 @@ genC opts = do
     includes =
         [ "#include <stdint.h>"
         , "#include <stdbool.h>"
-        , "#include <setjmp.h>"
         ]
      ++ if genMode opts == Gen_NIOSII_32
         then
@@ -424,6 +423,7 @@ genC opts = do
           [ "#include <stdio.h>"
           , "#include <stdlib.h>"
           , "#include <assert.h>"
+          , "#include <setjmp.h>"
           ]
 
     helpers :: [String]
@@ -679,13 +679,26 @@ genC opts = do
       , ""
       , "uint32_t _gc()"
       , "{"
-      , "  // Flush registers onto stack"
-      , "  jmp_buf regs;"
-      , "  uint32_t* regsPtr = (uint32_t*) &regs;"
-      , "  for (uint32_t i = 0; i < sizeof(regs)/4; i++) regsPtr[i] = 0;"
-      , "  setjmp(regs);"
-      , ""
-      , "  // Mark phase"
+      ] ++
+      ( if genMode opts == Gen_NIOSII_32
+        then
+          [ "  perf_start(1);"
+          , "  regs_t regs;"
+          , "  getRegs(regs);"
+          , "  "
+          , "  // Mark from registers"
+          , "  for (uint32_t i = 0; i < NUM_REGS; i++) _mark((Word) regs[i]);"
+          ]
+        else
+          [ "  // Flush registers onto stack"
+          , "  jmp_buf regs;"
+          , "  uint32_t* regsPtr = (uint32_t*) &regs;"
+          , "  for (uint32_t i = 0; i < sizeof(regs)/4; i++) regsPtr[i] = 0;"
+          , "  setjmp(regs);"
+          ]
+      ) ++
+      [ ""
+      , "  // Mark from stack"
       , "  register uint32_t* sp asm (\"sp\");"
       , "  Word* s = sp;"
       , "  while (s <= stackBase) {"
@@ -695,6 +708,9 @@ genC opts = do
       , ""
       , "  // Sweep phase"
       , "  _sweep();"
+      , if genMode opts == Gen_NIOSII_32
+        then "perf_stop(1);"
+        else ""
       , "  return 0;"
       , "}"
       , ""
@@ -718,9 +734,22 @@ genC opts = do
          , "  freePtr = heap;"
          , "  freeLen = (HEAP_SIZE/4);"
          , "  nextFreePtr = 0;"
+         , if genMode opts == Gen_NIOSII_32
+           then "perf_reset(); perf_start(0);"
+           else ""
          , "  Word result = " ++
                 mangle (topModName opts ++ ":" ++ "start") ++ "();"
-         , "  _render(result);"
+         ]
+      ++ ( if genMode opts == Gen_NIOSII_32
+           then [ "perf_stop(0);"
+                , "printf(\"Cycles: 0x%x%x\\n\", " ++
+                    "perf_get_hi(0), perf_get_lo(0));"
+                , "printf(\"GC cycles: 0x%x%x\\n\\n\", " ++
+                    "perf_get_hi(1), perf_get_lo(1));"
+                ]
+           else []
+         )
+      ++ [ "  _render(result);"
          , "  printf(\"\\n\");"
          , "  return 0;"
          , "}"

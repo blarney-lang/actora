@@ -55,3 +55,21 @@ int printf(const char* fmt, ...)
 
   return count;
 }
+
+void getRegs(regs_t regs)
+{ 
+  register uint32_t r16 asm ("r16");
+  register uint32_t r17 asm ("r17");
+  register uint32_t r18 asm ("r18");
+  register uint32_t r19 asm ("r19");
+  register uint32_t r20 asm ("r20");
+  register uint32_t r21 asm ("r21");
+  register uint32_t r22 asm ("r22");
+  regs[0] = r16;
+  regs[1] = r17;
+  regs[2] = r18;
+  regs[3] = r19;
+  regs[4] = r20;
+  regs[5] = r21;
+  regs[6] = r22;
+} 

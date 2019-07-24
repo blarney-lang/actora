@@ -1,8 +1,6 @@
 # Runtime options
-C_STACK_SIZE = 1024
-RET_STACK_SIZE = 1024
-STACK_SIZE = 4096
-HEAP_SIZE = 28000
+STACK_SIZE = 8192
+HEAP_SIZE = 57344
 
 # Binary utilities
 CC      = nios2-elf-gcc
@@ -14,7 +12,7 @@ CFLAGS  = -O2 -I. -static \
           -fvisibility=hidden -nostdlib -nostartfiles \
           -fsingle-precision-constant -fno-builtin-printf \
           -ffp-contract=off -fno-builtin \
-          -falign-functions=4
+          -falign-functions=4 -Wno-unused-label
 
 .PHONY: all
 all: main.elf
@@ -30,8 +28,6 @@ entry.o: entry.S
 
 main.elf: entry.o main.o baremetal.o link.ld
 	$(LD) $(LDFLAGS) -T link.ld -o main.elf entry.o main.o baremetal.o \
-	  --defsym=C_STACK_SIZE=$(C_STACK_SIZE) \
-	  --defsym=RET_STACK_SIZE=$(RET_STACK_SIZE) \
 	  --defsym=STACK_SIZE=$(STACK_SIZE) \
 	  --defsym=HEAP_SIZE=$(HEAP_SIZE)
 

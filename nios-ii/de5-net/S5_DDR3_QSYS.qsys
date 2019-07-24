@@ -85,7 +85,7 @@
    {
       datum baseAddress
       {
-         value = "0";
+         value = "1048576";
          type = "String";
       }
    }
@@ -101,7 +101,7 @@
    {
       datum baseAddress
       {
-         value = "65536";
+         value = "0";
          type = "String";
       }
    }
@@ -109,7 +109,7 @@
    {
       datum baseAddress
       {
-         value = "65536";
+         value = "0";
          type = "String";
       }
    }
@@ -134,6 +134,22 @@
       datum baseAddress
       {
          value = "268437504";
+         type = "String";
+      }
+   }
+   element performance_counter_0
+   {
+      datum _sortIndex
+      {
+         value = "7";
+         type = "int";
+      }
+   }
+   element performance_counter_0.control_slave
+   {
+      datum baseAddress
+      {
+         value = "65536";
          type = "String";
       }
    }
@@ -210,7 +226,7 @@
   <parameter name="initMemContent" value="true" />
   <parameter name="initializationFileName" value="onchip_mem.hex" />
   <parameter name="instanceID" value="NONE" />
-  <parameter name="memorySize" value="65536" />
+  <parameter name="memorySize" value="131072" />
   <parameter name="readDuringWriteMode" value="DONT_CARE" />
   <parameter name="resetrequest_enabled" value="true" />
   <parameter name="simAllowMRAMContentsFile" value="false" />
@@ -286,7 +302,7 @@
   <parameter name="breakOffset" value="32" />
   <parameter name="breakSlave" value="None" />
   <parameter name="cdx_enabled" value="false" />
-  <parameter name="clockFrequency" value="340000000" />
+  <parameter name="clockFrequency" value="300000000" />
   <parameter name="cpuArchRev" value="1" />
   <parameter name="cpuID" value="0" />
   <parameter name="cpuReset" value="false" />
@@ -297,7 +313,7 @@
   <parameter name="dataAddrWidth" value="29" />
   <parameter name="dataMasterHighPerformanceAddrWidth" value="1" />
   <parameter name="dataMasterHighPerformanceMapParam" value="" />
-  <parameter name="dataSlaveMapParam"><![CDATA[<address-map><slave name='instr_mem.s2' start='0x10000' end='0x14000' type='altera_avalon_onchip_memory2.s2' /><slave name='jtag_uart_0.avalon_jtag_slave' start='0x10000000' end='0x10000008' type='altera_avalon_jtag_uart.avalon_jtag_slave' /><slave name='nios2_gen2_0.debug_mem_slave' start='0x10000800' end='0x10001000' type='altera_nios2_gen2.debug_mem_slave' /></address-map>]]></parameter>
+  <parameter name="dataSlaveMapParam"><![CDATA[<address-map><slave name='instr_mem.s2' start='0x0' end='0x4000' type='altera_avalon_onchip_memory2.s2' /><slave name='performance_counter_0.control_slave' start='0x10000' end='0x10040' type='altera_avalon_performance_counter.control_slave' /><slave name='jtag_uart_0.avalon_jtag_slave' start='0x10000000' end='0x10000008' type='altera_avalon_jtag_uart.avalon_jtag_slave' /><slave name='nios2_gen2_0.debug_mem_slave' start='0x10000800' end='0x10001000' type='altera_nios2_gen2.debug_mem_slave' /></address-map>]]></parameter>
   <parameter name="data_master_high_performance_paddr_base" value="0" />
   <parameter name="data_master_high_performance_paddr_size" value="0" />
   <parameter name="data_master_paddr_base" value="0" />
@@ -419,16 +435,16 @@
   <parameter name="setting_tmr_output_disable" value="false" />
   <parameter name="setting_usedesignware" value="false" />
   <parameter name="shift_rot_impl" value="1" />
-  <parameter name="tightlyCoupledDataMaster0AddrWidth" value="16" />
-  <parameter name="tightlyCoupledDataMaster0MapParam"><![CDATA[<address-map><slave name='data_mem.s1' start='0x0' end='0x10000' type='altera_avalon_onchip_memory2.s1' /></address-map>]]></parameter>
+  <parameter name="tightlyCoupledDataMaster0AddrWidth" value="21" />
+  <parameter name="tightlyCoupledDataMaster0MapParam"><![CDATA[<address-map><slave name='data_mem.s1' start='0x100000' end='0x120000' type='altera_avalon_onchip_memory2.s1' /></address-map>]]></parameter>
   <parameter name="tightlyCoupledDataMaster1AddrWidth" value="1" />
   <parameter name="tightlyCoupledDataMaster1MapParam" value="" />
   <parameter name="tightlyCoupledDataMaster2AddrWidth" value="1" />
   <parameter name="tightlyCoupledDataMaster2MapParam" value="" />
   <parameter name="tightlyCoupledDataMaster3AddrWidth" value="1" />
   <parameter name="tightlyCoupledDataMaster3MapParam" value="" />
-  <parameter name="tightlyCoupledInstructionMaster0AddrWidth" value="17" />
-  <parameter name="tightlyCoupledInstructionMaster0MapParam"><![CDATA[<address-map><slave name='instr_mem.s1' start='0x10000' end='0x14000' type='altera_avalon_onchip_memory2.s1' /></address-map>]]></parameter>
+  <parameter name="tightlyCoupledInstructionMaster0AddrWidth" value="14" />
+  <parameter name="tightlyCoupledInstructionMaster0MapParam"><![CDATA[<address-map><slave name='instr_mem.s1' start='0x0' end='0x4000' type='altera_avalon_onchip_memory2.s1' /></address-map>]]></parameter>
   <parameter name="tightlyCoupledInstructionMaster1AddrWidth" value="1" />
   <parameter name="tightlyCoupledInstructionMaster1MapParam" value="" />
   <parameter name="tightlyCoupledInstructionMaster2AddrWidth" value="1" />
@@ -454,6 +470,13 @@
   <parameter name="tmr_enabled" value="false" />
   <parameter name="tracefilename" value="" />
   <parameter name="userDefinedSettings" value="" />
+ </module>
+ <module
+   name="performance_counter_0"
+   kind="altera_avalon_performance_counter"
+   version="16.1"
+   enabled="1">
+  <parameter name="numberOfSections" value="3" />
  </module>
  <module name="pll_0" kind="altera_pll" version="16.1" enabled="1">
   <parameter name="debug_print_output" value="false" />
@@ -574,7 +597,7 @@
   <parameter name="gui_multiply_factor" value="1" />
   <parameter name="gui_number_of_clocks" value="1" />
   <parameter name="gui_operation_mode" value="direct" />
-  <parameter name="gui_output_clock_frequency0" value="340.0" />
+  <parameter name="gui_output_clock_frequency0" value="300.0" />
   <parameter name="gui_output_clock_frequency1" value="100.0" />
   <parameter name="gui_output_clock_frequency10" value="100.0" />
   <parameter name="gui_output_clock_frequency11" value="100.0" />
@@ -679,6 +702,15 @@
    kind="avalon"
    version="16.1"
    start="nios2_gen2_0.data_master"
+   end="performance_counter_0.control_slave">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x00010000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="16.1"
+   start="nios2_gen2_0.data_master"
    end="nios2_gen2_0.debug_mem_slave">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x10000800" />
@@ -699,7 +731,7 @@
    start="nios2_gen2_0.data_master"
    end="instr_mem.s2">
   <parameter name="arbitrationPriority" value="1" />
-  <parameter name="baseAddress" value="0x00010000" />
+  <parameter name="baseAddress" value="0x0000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
@@ -726,7 +758,7 @@
    start="nios2_gen2_0.tightly_coupled_data_master_0"
    end="data_mem.s1">
   <parameter name="arbitrationPriority" value="1" />
-  <parameter name="baseAddress" value="0x0000" />
+  <parameter name="baseAddress" value="0x00100000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
@@ -735,7 +767,7 @@
    start="nios2_gen2_0.tightly_coupled_instruction_master_0"
    end="instr_mem.s1">
   <parameter name="arbitrationPriority" value="1" />
-  <parameter name="baseAddress" value="0x00010000" />
+  <parameter name="baseAddress" value="0x0000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection kind="clock" version="16.1" start="clk_50.clk" end="jtag_uart_0.clk" />
@@ -750,6 +782,11 @@
    version="16.1"
    start="pll_0.outclk0"
    end="nios2_gen2_0.clk" />
+ <connection
+   kind="clock"
+   version="16.1"
+   start="pll_0.outclk0"
+   end="performance_counter_0.clk" />
  <connection kind="clock" version="16.1" start="pll_0.outclk0" end="data_mem.clk1" />
  <connection
    kind="clock"
@@ -786,6 +823,11 @@
    version="16.1"
    start="clk_50.clk_reset"
    end="pll_0.reset" />
+ <connection
+   kind="reset"
+   version="16.1"
+   start="clk_50.clk_reset"
+   end="performance_counter_0.reset" />
  <connection
    kind="reset"
    version="16.1"
