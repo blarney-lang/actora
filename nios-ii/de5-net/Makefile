@@ -39,3 +39,4 @@ clean:
 	rm -f *.mif *.rpt *.msg *.summary *.sld *.sopcinfo *.jdi
 	rm -f *.pin *.done *.qws *.sof *.csv *.qws *.smsg
 	rm -rf dse* db incremental_db S5_DDR3_QSYS .qsys_edit reconfig_mif
+	make -C software clean
