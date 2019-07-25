@@ -58,7 +58,6 @@ data Instr =
   | STORE NumAtoms PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
   | PRIM Prim
-  | APPLY NumAtoms
   | HALT
   deriving Show
 
