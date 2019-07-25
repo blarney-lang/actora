@@ -1,5 +1,8 @@
 % Semantics of While language, with naive While program to count divisors
 
+-module(while).
+-export([main/1]).
+
 lookup([{X,Y}|S], V) ->
   if X == V -> Y;
      true -> lookup(S, V)
@@ -18,7 +21,7 @@ aval({sub, A1, A2}, S) -> aval(A1, S) - aval(A2, S).
 bval(true, S) -> true;
 bval(false, S) -> false;
 bval({eq, A1, A2}, S) -> aval(A1, S) == aval(A2, S);
-bval({leq, A1, A2}, S) -> aval(A1, S) <= aval(A2, S);
+bval({leq, A1, A2}, S) -> aval(A1, S) =< aval(A2, S);
 bval({neg, B}, S) -> not(bval(B, S));
 bval({con, B1, B2}, S) -> bval(B1, S) and bval(B2, S).
 
@@ -30,7 +33,8 @@ stm({comp, S1, S2}, S) ->
     {final, NewS} -> {inter, S2, NewS}
   end;
 stm({iff, B, S1, S2}, S) ->
-  if bval(B, S) -> {inter, S1, S};
+  Cond = bval(B, S),
+  if Cond -> {inter, S1, S};
      true -> {inter, S2, S}
   end;
 stm({while, B, S1}, S) ->
@@ -56,3 +60,10 @@ start() ->
                             {ass, 4, {sub, {var, 4}, {int, 1}}}}}},
   S = [{0,0}, {1,0}, {2,0}, {3, 50000}, {4, 0}, {5, 0}],
   lookup(sos(NDivs, S), 5).
+
+
+main(Args) ->
+  Begin = os:timestamp(),
+  io:format("Result: ~w\n", [start()]),
+  End = os:timestamp(),
+  io:format("Time: ~f\n", [timer:now_diff(End, Begin) / 1000000]).

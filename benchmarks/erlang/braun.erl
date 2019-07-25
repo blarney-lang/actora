@@ -1,5 +1,8 @@
 % Building and flattening Braun trees
 
+-module(braun).
+-export([main/1]).
+
 insert(X, empty) -> {branch, X, empty, empty};
 insert(X, {branch, Y, T0, T1}) ->
   {branch, X, insert(Y, T1), T0}.
@@ -31,4 +34,10 @@ propConvert(Xs) -> equal(Xs, toList(fromList(Xs))).
 benchmark(0, Xs) -> true;
 benchmark(N, Xs) -> propConvert(Xs) and benchmark(N-1, Xs).
 
-start() -> benchmark(10000, [1..200]).
+start() -> benchmark(10000, lists:seq(1,200)).
+
+main(Args) ->
+  Begin = os:timestamp(),
+  io:format("Result: ~w\n", [start()]),
+  End = os:timestamp(),
+  io:format("Time: ~f\n", [timer:now_diff(End, Begin) / 1000000]).

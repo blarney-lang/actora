@@ -4,4 +4,4 @@ fib(N) ->
     true   -> fib(N-1) + fib(N-2)
   end.
 
-start() -> fib(40);
+start() -> fib(40).

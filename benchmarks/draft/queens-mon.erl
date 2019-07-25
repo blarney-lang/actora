@@ -1,3 +1,5 @@
+% Solution to N-queens problem using non-deterministic monad
+
 -import(nondet).
 
 gen(0, NQ) -> return([]);
