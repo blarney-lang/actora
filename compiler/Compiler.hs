@@ -260,9 +260,9 @@ compile modName decls =
     exp env (Int i) =
       return [PUSH (INT (fromInteger i))]
     exp env (Fun f n) =
-     return [PUSH (FUN (InstrLabel f) n)]
+     return [PUSH (FUN (InstrLabel f))]
     exp env (Closure f n) =
-     return [PUSH (FUN (InstrLabel f) n)]
+     return [PUSH (FUN (InstrLabel f))]
     exp env (Var v) =
      return [COPY (get env v)]
     -- Lists and tuples
@@ -291,7 +291,7 @@ compile modName decls =
     exp env (Apply (Fun f n) es)
       | n == length es = do
           is <- expList env es
-          return (is ++ [CALL (InstrLabel f) (length es)])
+          return (is ++ [CALL (InstrLabel f)])
       | otherwise = error ("Function " ++ f ++ " applied to " ++
           " wrong number of arguments")
     -- Closure creation
@@ -552,7 +552,7 @@ compile modName decls =
     prog :: Fresh [Instr]
     prog = do 
       is <- concat <$> mapM fun (M.toList eqnMap)
-      return $ [CALL (InstrLabel (modName ++ ":start")) 0]
+      return $ [CALL (InstrLabel (modName ++ ":start"))]
             ++ [HALT]
             ++ is
             ++ [LABEL "$bind_fail"]

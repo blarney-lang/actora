@@ -18,6 +18,7 @@ data Flag =
     Run
   | CompileToC String
   | CompileToNIOSII
+  | CompileToBytecode
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -27,7 +28,9 @@ options =
   , Option ['c'] [] (ReqArg CompileToC "DIR")
       "Compile to 32-bit C (experimental)"
   , Option [] ["niosii"] (NoArg CompileToNIOSII)
-       "C backend: target NIOS-II"
+      "C backend: target NIOS-II"
+  , Option ['b'] [] (NoArg CompileToBytecode)
+      "Genereate stack machine bytecode"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -47,10 +50,12 @@ main = do
   case files of
     [modName] -> do
       prog <- loadModule modName
+
       -- Evaluate using compiler + small-step semantics
       when (Run `elem` flags) $ do
         putStrLn (run (compile modName prog))
         exitSuccess
+
       -- Generate C code
       case [dir | CompileToC dir <- flags] of
         [] -> return ()
@@ -69,6 +74,13 @@ main = do
         dir:dirs -> do
           putStrLn "Expected on target directory for compilation"
           exitFailure
+
+      -- Generate bytecode
+      when (CompileToBytecode `elem` flags) $ do
+        mapM_ print (compile modName prog)
+        exitSuccess
+
     other -> return ()
+
   putStrLn "Expected single module name as argument"
   exitFailure

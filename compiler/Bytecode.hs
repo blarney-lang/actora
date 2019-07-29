@@ -20,7 +20,7 @@ data InstrPtr =
 
 -- Atoms are words residing on the stack and heap
 data Atom =
-    FUN InstrPtr Arity
+    FUN InstrPtr
   | INT Int
   | ATOM String
   | PTR PtrKind NumAtoms Int
@@ -46,7 +46,7 @@ data Prim =
 data Instr =
     LABEL String
   | PUSH Atom
-  | CALL InstrPtr Arity
+  | CALL InstrPtr
   | ICALL
   | COPY StackOffset
   | JUMP InstrPtr
@@ -97,8 +97,8 @@ link instrs = L.map replace (dropLabels instrs)
     dropLabels (i:is) = i : dropLabels is
 
     -- Replace labels with addresses
-    replace (PUSH (FUN (InstrLabel s) n)) = PUSH (FUN (resolve s) n)
-    replace (CALL (InstrLabel s) n) = CALL (resolve s) n
+    replace (PUSH (FUN (InstrLabel s))) = PUSH (FUN (resolve s))
+    replace (CALL (InstrLabel s)) = CALL (resolve s)
     replace (SLIDE_JUMP n m (InstrLabel s)) = SLIDE_JUMP n m (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
     replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)

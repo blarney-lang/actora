@@ -48,14 +48,14 @@ step (pc, i, h, s, r, fs) =
     -- Push onto stack
     PUSH a -> (pc+1, i, h, a:s, r, fs)
     -- Function call
-    CALL (InstrAddr a) n -> (a, i, h, s, (pc+1):r, fs)
+    CALL (InstrAddr a) -> (a, i, h, s, (pc+1):r, fs)
     -- Indirect function call
     ICALL ->
-      let FUN (InstrAddr a) n : rest = s in
+      let FUN (InstrAddr a) : rest = s in
         (a, i, h, rest, (pc+1):r, fs)
     -- Indirect jump
     IJUMP ->
-      let FUN (InstrAddr a) n : rest = s in
+      let FUN (InstrAddr a) : rest = s in
         (a, i, h, rest, r, fs)
     -- Push from stack
     COPY n -> (pc+1, i, h, (s!!n):s, r, fs)
@@ -143,7 +143,7 @@ run instrs = exec initial
 
     render h (INT i) = show i
     render h (ATOM s) = s
-    render h (FUN f n) = "FUN"
+    render h (FUN f) = "FUN"
     render h (PTR k n p) =
       case k of
         PtrApp n -> render h (head atoms) ++ "/" ++ show n ++
