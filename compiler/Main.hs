@@ -8,9 +8,10 @@ import Control.Monad
 import Syntax
 import Parser
 import Module
-import Bytecode
+import StackIR
 import Compiler
 import CBackend
+import Bytecode
 import Semantics
 
 -- Command-line flags
@@ -18,6 +19,7 @@ data Flag =
     Run
   | CompileToC String
   | CompileToNIOSII
+  | CompileToStackIR
   | CompileToBytecode
   deriving (Eq, Show)
 
@@ -29,8 +31,10 @@ options =
       "Compile to 32-bit C (experimental)"
   , Option [] ["niosii"] (NoArg CompileToNIOSII)
       "C backend: target NIOS-II"
+  , Option ['s'] [] (NoArg CompileToStackIR)
+      "Genereate stack IR"
   , Option ['b'] [] (NoArg CompileToBytecode)
-      "Genereate stack machine bytecode"
+      "Genereate bytecode"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -75,9 +79,14 @@ main = do
           putStrLn "Expected on target directory for compilation"
           exitFailure
 
+      -- Generate stack IR
+      when (CompileToStackIR `elem` flags) $ do
+        mapM_ print (compile modName prog)
+        exitSuccess
+
       -- Generate bytecode
       when (CompileToBytecode `elem` flags) $ do
-        mapM_ print (compile modName prog)
+        print $ encode $ compile modName prog
         exitSuccess
 
     other -> return ()

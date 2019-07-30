@@ -10,9 +10,9 @@ import qualified Monad.WriterFresh as WF
 
 -- Local imports
 import Syntax
-import Descend
 import Module
-import Bytecode
+import Descend
+import StackIR
 
 -- Transformation passes to core
 -- =============================
@@ -81,25 +81,25 @@ freeSeq (e : es) = free e `union` freeSeq es
 lambdaLift :: [Decl] -> [Decl]
 lambdaLift ds = ds' ++ new
   where
-    (_, new, ds') = WF.runWF (mapM liftDecl ds) "\\" 0
+    (_, new, ds') = WF.runWF (mapM liftDecl ds) "\\lam" 0
 
     liftDecl :: Decl -> WF.WriterFresh Decl Decl
     liftDecl (FunDecl f ps g rhs) = do
       g' <- case g of
               Nothing -> return g
-              Just e -> Just <$> bottomupM lift e
-      rhs' <- mapM (bottomupM lift) rhs
+              Just e -> Just <$> bottomupM (lift f) e
+      rhs' <- mapM (bottomupM (lift f)) rhs
       return  (FunDecl f ps g' rhs')
     liftDecl other = return other
 
-    lift :: Exp -> WF.WriterFresh Decl Exp
-    lift (Lambda eqns) = do
-        f <- WF.fresh
+    lift :: Id -> Exp -> WF.WriterFresh Decl Exp
+    lift context (Lambda eqns) = do
+        f <- (++ "_" ++ context) <$> WF.fresh
         let vs = free (Lambda eqns)
         WF.writeMany [ClosureDecl f vs ps g body | (ps, g, body) <- eqns]
         let n = length vs + getArity eqns
         return (Apply (Closure f n) (map Var vs))
-    lift e = return e
+    lift context e = return e
 
     getArity :: [([Exp], Guard, [Exp])] -> Int
     getArity eqns
@@ -247,7 +247,7 @@ anon = ""
 
 compile :: Id -> [Decl] -> [Instr]
 compile modName decls =
-    snd $ runFresh prog "@" 0
+    peephole $ snd $ runFresh prog "@" 0
   where
     -- Pre-processed program
     decls' = core modName decls
@@ -553,9 +553,16 @@ compile modName decls =
     prog = do 
       is <- concat <$> mapM fun (M.toList eqnMap)
       return $ [CALL (InstrLabel (modName ++ ":start"))]
-            ++ [HALT]
+            ++ [HALT ""]
             ++ is
-            ++ [LABEL "$bind_fail"]
-            ++ [LABEL "$case_fail"]
-            ++ [LABEL "$eqn_fail"]
-            ++ [LABEL "$apply_fail"]
+            ++ [LABEL "$bind_fail", HALT "EBindFail"]
+            ++ [LABEL "$case_fail", HALT "ECaseFail"]
+            ++ [LABEL "$eqn_fail", HALT "EEqnFail"]
+            ++ [LABEL "$apply_fail", HALT "EApplyFail"]
+
+    -- Peephole optimisations / simplifications
+    peephole :: [Instr] -> [Instr]
+    peephole [] = []
+    peephole (SLIDE_JUMP dist n dest:rest) =
+      [SLIDE dist n, JUMP dest] ++ peephole rest
+    peephole (instr:rest) = instr : peephole rest

@@ -2,11 +2,12 @@
 
 module Semantics where
 
-import Bytecode
+import StackIR 
 import Data.Maybe
 import Prelude as P
 import Data.Map as M
 import Data.List as L
+import Data.Bits as B
 import Data.Array as A
 import Data.Sequence as S
 
@@ -29,7 +30,7 @@ type ReturnStack = [InstrAddr]
 data Flags =
   Flags {
     -- Application has terminated
-    flagHalt :: Bool
+    flagHalt :: Maybe ErrorCode
   }
   deriving Show
 
@@ -47,6 +48,14 @@ step (pc, i, h, s, r, fs) =
   case i A.! pc of
     -- Push onto stack
     PUSH a -> (pc+1, i, h, a:s, r, fs)
+    -- Set upper bits
+    SETU val -> (pc+1, i, h, top:tail s, r, fs)
+      where
+        top = case head s of
+                INT x -> INT ((val `shiftL` 16) .|. x)
+                ATOM x -> ATOM x
+                FUN (InstrAddr x) ->
+                  FUN (InstrAddr ((val `shiftL` 16) .|. x))
     -- Function call
     CALL (InstrAddr a) -> (a, i, h, s, (pc+1):r, fs)
     -- Indirect function call
@@ -55,8 +64,9 @@ step (pc, i, h, s, r, fs) =
         (a, i, h, rest, (pc+1):r, fs)
     -- Indirect jump
     IJUMP ->
-      let FUN (InstrAddr a) : rest = s in
-        (a, i, h, rest, r, fs)
+      case s of
+        FUN (InstrAddr a) : rest -> (a, i, h, rest, r, fs)
+        other -> error "EJumpAddr"
     -- Push from stack
     COPY n -> (pc+1, i, h, (s!!n):s, r, fs)
     -- Direct unconditional jump
@@ -116,13 +126,13 @@ step (pc, i, h, s, r, fs) =
             PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
             PrimLessEq -> (2, if x <= y then ATOM "true" else ATOM "false")
     -- Halt
-    HALT -> (pc, i, h, s, r, fs { flagHalt = True })
+    HALT err -> (pc, i, h, s, r, fs { flagHalt = Just err })
 
 -- Run the program, and return result rendered as a string
 run :: [Instr] -> String
 run instrs = exec initial
   where
-    instrs' = link instrs
+    instrs' = fst (link instrs)
     numInstrs = P.length instrs'
 
     -- Instruction memory
@@ -131,15 +141,17 @@ run instrs = exec initial
     -- Initial state of flags register
     flags = 
       Flags {
-        flagHalt = False
+        flagHalt = Nothing
       }
 
     -- Initial state of abstract machine
     initial = (0, instrMem, S.empty, [], [], flags)
 
-    exec (pc, i, h, s, r, fs)
-      | flagHalt fs = render h (head s)
-    exec state = exec (step state)
+    exec state@(pc, i, h, s, r, fs) =
+      case flagHalt fs of
+        Nothing -> exec (step state)
+        Just "" -> render h (head s)
+        Just code -> error code
 
     render h (INT i) = show i
     render h (ATOM s) = s
