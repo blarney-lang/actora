@@ -425,7 +425,7 @@ compile modName decls =
       return [RETURN (stackSize env)]
     -- Return from case alternative
     seq env [] (Just label) =
-      return [SLIDE_JUMP (scopeSize env) 1 (InstrLabel label)]
+      return [SLIDE_JUMP (scopeSize env - 1) 1 (InstrLabel label)]
     -- Pattern bindings
     seq env (Bind p e : rest) k = do
       v <- fresh
@@ -565,4 +565,6 @@ compile modName decls =
     peephole [] = []
     peephole (SLIDE_JUMP dist n dest:rest) =
       [SLIDE dist n, JUMP dest] ++ peephole rest
+    peephole (COPY n : COPY m : rest) =
+      COPY2 n m : peephole rest
     peephole (instr:rest) = instr : peephole rest

@@ -69,6 +69,8 @@ step (pc, i, h, s, r, fs) =
         other -> error "EJumpAddr"
     -- Push from stack
     COPY n -> (pc+1, i, h, (s!!n):s, r, fs)
+    -- Push from stack
+    COPY2 n m -> (pc+1, i, h, (s!!(m-1)):(s!!n):s, r, fs)
     -- Direct unconditional jump
     JUMP (InstrAddr a) -> (a, i, h, s, r, fs)
     -- Slide top stack elements

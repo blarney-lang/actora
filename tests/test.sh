@@ -68,7 +68,7 @@ for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
   $ELITE -b $BASE > red/$BASE.red
-  ../emulator/redemu red/$BASE.red > $BASE.got
+  ../emulator/redemu red/$BASE.red | head -n 1 > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else

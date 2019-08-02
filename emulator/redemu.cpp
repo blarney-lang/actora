@@ -247,6 +247,8 @@ struct State {
   Cell stack[STACK_SIZE];
   // Return stack
   uint32_t retStack[RET_STACK_SIZE];
+  // Count number of cycles
+  uint64_t cycles;
 };
 
 // Helpers
@@ -361,27 +363,32 @@ uint32_t run(Bytecode* code, State* s)
       }
       else
         s->pc++;
+      s->cycles++;
     }
     else if (op == I_PushInt) {
       if (s->sp >= STACK_SIZE) return EStackOverflow;
       s->stack[s->sp++] = makeInt(getIntOperand(instr));
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_PushAtom) {
       if (s->sp >= STACK_SIZE) return EStackOverflow;
       s->stack[s->sp++] = makeAtom(getOperand(instr));
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_PushIPtr) {
       if (s->sp >= STACK_SIZE) return EStackOverflow;
       s->stack[s->sp++] = makeFun(getOperand(instr));
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_SetUpper) {
       if (s->sp == 0) return EStackUnderflow;
       Cell* top = &s->stack[s->sp-1];
       top->val = (getOperand(instr) << 16) | top->val;
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_Slide) {
       uint32_t len = getSlideLen(instr);
@@ -392,6 +399,7 @@ uint32_t run(Bytecode* code, State* s)
         s->stack[s->sp - dist - i] = s->stack[s->sp - i];
       s->sp -= dist;
       s->pc++;
+      s->cycles += len == 0 ? 1 : (len+1)/2;
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);
@@ -400,12 +408,28 @@ uint32_t run(Bytecode* code, State* s)
       s->stack[s->sp] = s->stack[s->sp - 1 - offset];
       s->sp++;
       s->pc++;
+      s->cycles++;
+    }
+    else if (op == I_Copy2) {
+      uint32_t offset1 = getCopy2First(instr);
+      uint32_t offset2 = getCopy2Second(instr);
+      if (offset1 >= s->sp) return EStackIndex;
+      if (s->sp >= STACK_SIZE) return EStackOverflow;
+      s->stack[s->sp] = s->stack[s->sp - 1 - offset1];
+      s->sp++;
+      if (offset2 >= s->sp) return EStackIndex;
+      if (s->sp >= STACK_SIZE) return EStackOverflow;
+      s->stack[s->sp] = s->stack[s->sp - 1 - offset2];
+      s->sp++;
+      s->pc++;
+      s->cycles++;
     }
     else if (op == I_Call) {
       uint32_t addr = getOperand(instr);
       if (s->rp >= RET_STACK_SIZE) return EStackOverflow;
       s->retStack[s->rp++] = s->pc + 1;
       s->pc = addr;
+      s->cycles++;
     }
     else if (op == I_ICall) {
       if (s->sp == 0) return EStackUnderflow;
@@ -415,9 +439,11 @@ uint32_t run(Bytecode* code, State* s)
       s->retStack[s->rp++] = s->pc + 1;
       s->pc = top.val;
       s->sp--;
+      s->cycles++;
     }
     else if (op == I_Jump) {
       s->pc = getOperand(instr);
+      s->cycles++;
     }
     else if (op == I_IJump) {
       if (s->sp == 0) return EStackUnderflow;
@@ -425,6 +451,7 @@ uint32_t run(Bytecode* code, State* s)
       if (top.tag.kind != FUN) return EJumpAddr;
       s->pc = top.val;
       s->sp--;
+      s->cycles++;
     }
     else if (op == I_Return) {
       uint32_t pop = getOperand(instr);
@@ -435,6 +462,7 @@ uint32_t run(Bytecode* code, State* s)
       Cell top = s->stack[s->sp-1];
       s->sp -= pop;
       s->stack[s->sp++] = top;
+      s->cycles++;
     }
     else if (op == I_Load) {
       bool pop = getLoadPopFlag(instr);
@@ -449,6 +477,7 @@ uint32_t run(Bytecode* code, State* s)
       for (int32_t i = len-1; i >= 0; i--)
         s->stack[s->sp++] = s->heap[addr+i];
       s->pc++;
+      s->cycles += (len+1)/2;
     }
     else if (op == I_Store) {
       uint32_t kind = getStoreKind(instr);
@@ -474,6 +503,7 @@ uint32_t run(Bytecode* code, State* s)
       }
       s->stack[s->sp++] = cell;
       s->pc++;
+      s->cycles += (len+1)/2;
     }
     else if (op == I_AddImm || op == I_SubImm) {
       if (s->sp < 1) return EStackIndex;
@@ -484,6 +514,7 @@ uint32_t run(Bytecode* code, State* s)
       else
         a->val = (uint32_t) ((int32_t) a->val - getIntOperand(instr));
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_Add || op == I_Sub) {
       if (s->sp < 2) return EStackIndex;
@@ -496,6 +527,7 @@ uint32_t run(Bytecode* code, State* s)
         b->val = (uint32_t) ((int32_t) a->val - (int32_t) b->val);
       s->sp--;
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_Eq || op == I_NotEq ||
              op == I_Less || op == I_LessEq) {
@@ -514,6 +546,7 @@ uint32_t run(Bytecode* code, State* s)
         b->val = ((int32_t) a->val <= (int32_t) b->val) ? 1 : 0;
       s->sp--;
       s->pc++;
+      s->cycles++;
     }
     else if (op == I_Halt) {
       return getOperand(instr);
@@ -603,6 +636,7 @@ int main(int argc, char** argv)
   state->hp = 0;
   state->sp = 0;
   state->rp = 0;
+  state->cycles = 0;
 
   uint32_t err = run(&code, state);
   if (err != ENone) {
@@ -613,6 +647,7 @@ int main(int argc, char** argv)
   assert(state->sp > 0);
   render(&code, state, state->stack[0]);
   printf("\n");
+  printf("Cycles: %lu\n", state->cycles);
 
   fclose(fp);
   return 0;
