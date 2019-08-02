@@ -111,9 +111,10 @@ link instrs = (L.map replace (dropLabels instrs), toAddr)
 
 -- Determine all atoms used
 atoms :: [Instr] -> [String]
-atoms is = S.toList (S.unions (L.map get is) `S.union` reserved)
+atoms is = 
+  reserved ++ S.toList (S.unions (L.map get is) S.\\ S.fromList reserved)
   where
-    reserved = S.fromList ["true", "false", "[]"]
+    reserved = ["false", "true", "[]"]
     get (PUSH (ATOM a)) = S.singleton a
     get (BRANCH (_, IsAtom a) _ _) = S.singleton a
     get other = S.empty

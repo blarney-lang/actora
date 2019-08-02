@@ -7,7 +7,7 @@ PushAtom    | 1000000001           | data<16>             |
 PushIPtr    | 1000000010           | data<16>             |
             +----------------------+----------------------+
 SetUpper    | 1000000011           | data<16>             |
-            +----------------------+-------------6--------+
+            +----------------------+-------------5--------+
 Slide       | 1000000100           | dist<10>    | n<6>   |
             +----------------------+----------------------+
 Copy        | 1000000101           | n<16>                |
@@ -25,8 +25,8 @@ IJump       | 1000001011           |                      |
 Return      | 1000001100           | pop<16>              |
             +----------------------+-------14-------------+
 Load        | 1000001101           | pop<1> |             |
-            +----------------------+--------13------7-----+
-Store       | 1000001110           | kind<2> | n<6> |     |
+            +----------------------+-----13------7------1-+
+Store       | 1000001110           | k<2> | a<6> | n<6> | |
             +----------------------+----------------------+
 Add         | 1000010000           |                      |
             +----------------------+----------------------+
@@ -100,7 +100,7 @@ data.
 Slide the top `n` stack elements down the stack by `dist` positions.
 
 ```
-25          15         6
+25          15          5
 +------------+----------+------+
 | 1000000100 | dist<10> | n<6> |
 +------------+----------+------+
@@ -236,10 +236,10 @@ before pushing the heap data to the stack.
 Pop the top `n` stack elements and append them to the heap.
 
 ```
-25          15       13      7
-+------------+---------+------+-----------+
-| 1000001110 | kind<2> | n<6> | unused<8> |
-+------------+---------+------+-----------+
+25          15        13          7      1
++------------+---------+----------+------+-----------+
+| 1000001110 | kind<2> | arity<6> | n<6> | unused<2> |
++------------+---------+----------+------+-----------+
 ```
 
 The kind field is one of:
@@ -247,6 +247,8 @@ The kind field is one of:
   * `00` - list constructor
   * `01` - tuple constructor
   * `10` - closure constructor
+
+The `arity` is only valid when storing a closure.
 
 ## Add
 
@@ -359,6 +361,9 @@ Terminate with the given error code.
   EJumpAddr       | 5      | Jump/branch/call target is not an instr pointer
   EStackIndex     | 6      | Stack index out of bounds
   EUnknown        | 7      | Unknown error
+  EInstrIndex     | 8      | Instruction index out of bounds
+  EUnknownInstr   | 9      | Unrecognised instruction
+  EStackUnderflow | 10     | Stack underflow
   EBindFail       | 16     | Pattern mismatch in binding
   ECaseFail       | 17     | No matching case alternatives
   EEqnFail        | 18     | No matching equation

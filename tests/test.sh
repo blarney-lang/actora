@@ -56,3 +56,25 @@ for PROG in $(ls *.erl); do
 done
 rm -f *.got
 rm -rf tmp
+
+# Check correctness of emulator
+echo ""
+echo "TESTING STACK MACHINE EMULATOR"
+make -s -C ../emulator/
+rm -f *.got
+rm -rf red
+mkdir red
+for PROG in $(ls *.erl); do
+  BASE=$(basename $PROG .erl)
+  echo -n "$BASE: "
+  $ELITE -b $BASE > red/$BASE.red
+  ../emulator/redemu red/$BASE.red > $BASE.got
+  if cmp $BASE.got out/$BASE.out; then
+    echo -e "${GREEN}OK${NC}"
+  else
+    echo -e "${RED}FAILED${NC}"
+    exit -1
+  fi
+done
+rm -f *.got
+rm -rf red

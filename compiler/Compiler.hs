@@ -553,7 +553,7 @@ compile modName decls =
     prog = do 
       is <- concat <$> mapM fun (M.toList eqnMap)
       return $ [CALL (InstrLabel (modName ++ ":start"))]
-            ++ [HALT ""]
+            ++ [HALT "ENone"]
             ++ is
             ++ [LABEL "$bind_fail", HALT "EBindFail"]
             ++ [LABEL "$case_fail", HALT "ECaseFail"]

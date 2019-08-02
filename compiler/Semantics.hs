@@ -150,7 +150,7 @@ run instrs = exec initial
     exec state@(pc, i, h, s, r, fs) =
       case flagHalt fs of
         Nothing -> exec (step state)
-        Just "" -> render h (head s)
+        Just "ENone" -> render h (head s)
         Just code -> error code
 
     render h (INT i) = show i

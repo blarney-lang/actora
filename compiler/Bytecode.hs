@@ -129,13 +129,18 @@ encode instrs =
         STORE n kind ->
             unsigned 10 0b1000001110 <.>
             unsigned 2 k <.>
+            unsigned 6 a <.>
             unsigned 6 n <.>
-            unsigned 8 0
+            unsigned 2 0
           where
             k = case kind of
-                  PtrCons -> 0b00
+                  PtrCons  -> 0b00
                   PtrTuple -> 0b01
                   PtrApp n -> 0b10
+            a = case kind of
+                  PtrCons  -> 0
+                  PtrTuple -> 0
+                  PtrApp n -> n
         PRIM PrimAdd ->
           unsigned 10 0b1000010000 <.> unsigned 16 0
         PRIM (PrimAddImm imm) ->
@@ -178,16 +183,19 @@ encode instrs =
 
 -- Encode error string
 errorCode :: String -> Int
-errorCode "ENone"          = 0
-errorCode "EStackOverflow" = 1
-errorCode "EHeapOverflow"  = 2
-errorCode "EArith"         = 3
-errorCode "ELoadAddr"      = 4
-errorCode "EJumpAddr"      = 5
-errorCode "EStackIndex"    = 6
-errorCode "EUnknown"       = 7
-errorCode "EBindFail"      = 16
-errorCode "ECaseFail"      = 17
-errorCode "EEqnFail"       = 18
-errorCode "EApplyFail"     = 19
-errorCode other            = errorCode "EUnknown"
+errorCode "ENone"           = 0
+errorCode "EStackOverflow"  = 1
+errorCode "EHeapOverflow"   = 2
+errorCode "EArith"          = 3
+errorCode "ELoadAddr"       = 4
+errorCode "EJumpAddr"       = 5
+errorCode "EStackIndex"     = 6
+errorCode "EUnknown"        = 7
+errorCode "EInstrIndex"     = 8
+errorCode "EUnknownInstr"   = 9
+errorCode "EStackUnderflow" = 10
+errorCode "EBindFail"       = 16
+errorCode "ECaseFail"       = 17
+errorCode "EEqnFail"        = 18
+errorCode "EApplyFail"      = 19
+errorCode other             = errorCode "EUnknown"
