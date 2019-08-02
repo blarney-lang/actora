@@ -14,7 +14,7 @@ fi
 if [ "$1" == "regen" ]; then
   for PROG in $(ls *.erl); do
     BASE=$(basename $PROG .erl)
-    $ELITE -r $BASE > out/$BASE.out
+    $ELITE -r $PROG > out/$BASE.out
   done
   exit -1
 fi
@@ -25,7 +25,7 @@ rm -f *.got
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -r $BASE > $BASE.got
+  $ELITE -r $PROG > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else
@@ -44,7 +44,7 @@ mkdir tmp
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -c tmp/$BASE $BASE
+  $ELITE -c tmp/$BASE $PROG
   make -s -C tmp/$BASE
   tmp/$BASE/main > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
@@ -67,7 +67,7 @@ mkdir red
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -b $BASE > red/$BASE.red
+  $ELITE -b $PROG > red/$BASE.red
   ../emulator/redemu red/$BASE.red | head -n 1 > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"

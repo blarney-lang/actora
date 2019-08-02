@@ -415,12 +415,11 @@ uint32_t run(Bytecode* code, State* s)
       uint32_t offset2 = getCopy2Second(instr);
       if (offset1 >= s->sp) return EStackIndex;
       if (s->sp >= STACK_SIZE) return EStackOverflow;
-      s->stack[s->sp] = s->stack[s->sp - 1 - offset1];
-      s->sp++;
       if (offset2 >= s->sp) return EStackIndex;
       if (s->sp >= STACK_SIZE) return EStackOverflow;
-      s->stack[s->sp] = s->stack[s->sp - 1 - offset2];
-      s->sp++;
+      s->stack[s->sp] = s->stack[s->sp - 1 - offset1];
+      s->stack[s->sp+1] = s->stack[s->sp - 1 - offset2];
+      s->sp += 2;
       s->pc++;
       s->cycles++;
     }
@@ -477,7 +476,7 @@ uint32_t run(Bytecode* code, State* s)
       for (int32_t i = len-1; i >= 0; i--)
         s->stack[s->sp++] = s->heap[addr+i];
       s->pc++;
-      s->cycles += (len+1)/2;
+      s->cycles += 1 + (len+1)/2;
     }
     else if (op == I_Store) {
       uint32_t kind = getStoreKind(instr);

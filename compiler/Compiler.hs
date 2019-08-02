@@ -566,5 +566,5 @@ compile modName decls =
     peephole (SLIDE_JUMP dist n dest:rest) =
       [SLIDE dist n, JUMP dest] ++ peephole rest
     peephole (COPY n : COPY m : rest) =
-      COPY2 n m : peephole rest
+      COPY2 n (m-1) : peephole rest
     peephole (instr:rest) = instr : peephole rest

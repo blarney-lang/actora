@@ -14,8 +14,8 @@ import Parser
 import Descend
 
 -- A simple module system, with a slow implementation
-loadModule :: String -> IO [Decl]
-loadModule modName = do
+loadModule :: String -> String -> IO [Decl]
+loadModule prefix modName = do
     -- Determine filename
     fileName <- searchPaths >>= locate
     -- Parse file
@@ -30,7 +30,7 @@ loadModule modName = do
     searchPaths :: IO [String]
     searchPaths = do
       libDir <- lookupEnv "ELITE_ROOT"
-      return (["."] ++ [dir ++ "/lib" | Just dir <- [libDir]])
+      return ([prefix] ++ [dir ++ "/lib" | Just dir <- [libDir]])
 
     -- Determine module location
     locate :: [String] -> IO String
@@ -48,7 +48,7 @@ loadModule modName = do
       -- Determine imports
       let imports = [m | ImportDecl m <- ds]
       -- Recurse
-      importedMods <- mapM loadModule imports
+      importedMods <- mapM (loadModule prefix) imports
       -- Remove duplicate definitions
       let imported = removeDups importedMods
       -- Resolve names and remove unused definitions

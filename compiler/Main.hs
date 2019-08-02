@@ -34,7 +34,7 @@ options =
   , Option ['s'] [] (NoArg CompileToStackIR)
       "Genereate stack IR"
   , Option ['b'] [] (NoArg CompileToBytecode)
-      "Genereate bytecode"
+      "Generate bytecode"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -52,8 +52,16 @@ main = do
   args <- getArgs
   (flags, files) <- getOptions args
   case files of
-    [modName] -> do
-      prog <- loadModule modName
+    [fileName] -> do
+      (modName, dir) <- case reverse fileName of
+        'l':'r':'e':'.':rest -> return
+          (reverse $ takeWhile (/= '/') rest,
+           reverse $ dropWhile (/= '/') rest)
+        other -> do
+          putStrLn "Expected '.erl' file"
+          exitFailure
+
+      prog <- loadModule (dir ++ "./") modName
 
       -- Evaluate using compiler + small-step semantics
       when (Run `elem` flags) $ do
