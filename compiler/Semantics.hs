@@ -52,10 +52,10 @@ step (pc, i, h, s, r, fs) =
     SETU val -> (pc+1, i, h, top:tail s, r, fs)
       where
         top = case head s of
-                INT x -> INT ((val `shiftL` 16) .|. x)
+                INT x -> INT ((val `shiftL` 16) .|. (x .&. 0xffff))
                 ATOM x -> ATOM x
                 FUN (InstrAddr x) ->
-                  FUN (InstrAddr ((val `shiftL` 16) .|. x))
+                  FUN (InstrAddr ((val `shiftL` 16) .|. (x .&. 0xffff)))
     -- Function call
     CALL (InstrAddr a) -> (a, i, h, s, (pc+1):r, fs)
     -- Indirect function call

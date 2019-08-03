@@ -3,6 +3,7 @@ module Compiler where
 -- Standard imports
 import Data.Char
 import Data.List
+import Data.Bits
 import Monad.Fresh
 import Control.Monad
 import qualified Data.Map as M
@@ -567,4 +568,18 @@ compile modName decls =
       [SLIDE dist n, JUMP dest] ++ peephole rest
     peephole (COPY n : COPY m : rest) =
       COPY2 n (m-1) : peephole rest
+    peephole (PUSH (INT i):rest)
+      | (i >= 2^15 || i < -(2^15)) =
+          PUSH (INT (lowerBits i)) : SETU (upperBits i) : peephole rest
     peephole (instr:rest) = instr : peephole rest
+
+    -- Determine lower 16 bits
+    lowerBits :: Int -> Int
+    lowerBits x
+      | testBit y 15 = y - (2^16)
+      | otherwise = y
+      where y = x .&. 0xffff
+
+    -- Determine upper 16 bits
+    upperBits :: Int -> Int
+    upperBits x = (x `shiftR` 16) .&. 0xffff

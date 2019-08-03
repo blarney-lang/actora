@@ -37,12 +37,12 @@ data BV = BV { width :: Int, value :: Integer }
 -- Construct a signed bit vector
 signed :: Integral v => Int -> v -> Maybe BV
 signed w v
-  | i >= lo && i <= hi = Just (BV { width = w, value = i })
+  | i >= lo && i <= hi = Just (BV { width = w, value = i .&. 0xffff })
   | otherwise = Nothing
   where
     i = toInteger v
-    lo = -2 ^ (w-1) + 1
-    hi = 2 ^ (w-1)
+    lo = -2 ^ (w-1)
+    hi = 2 ^ (w-1) - 1
 
 -- Construct an unsigned bit vector
 unsigned :: Integral v => Int -> v -> Maybe BV

@@ -386,7 +386,7 @@ uint32_t run(Bytecode* code, State* s)
     else if (op == I_SetUpper) {
       if (s->sp == 0) return EStackUnderflow;
       Cell* top = &s->stack[s->sp-1];
-      top->val = (getOperand(instr) << 16) | top->val;
+      top->val = (getOperand(instr) << 16) | (top->val & 0xffff);
       s->pc++;
       s->cycles++;
     }
