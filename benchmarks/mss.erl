@@ -17,6 +17,6 @@ mss(Xs) ->
     end).
 
 benchmark(0, Xs) -> 0;
-benchmark(N, Xs) -> mss(Xs) + benchmark(N-1, Xs).
+benchmark(N, Xs) -> mss(Xs), benchmark(N-1, Xs).
 
 start() -> benchmark(5, [1..500]).
