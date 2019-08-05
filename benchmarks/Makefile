@@ -1,17 +1,29 @@
 BENCHMARKS = fib queens mss braun while adjoxo
 CS = $(patsubst %, c-%, $(BENCHMARKS))
 CRUNS = $(patsubst %, run-c-%, $(BENCHMARKS))
+REDS = $(patsubst %, %.red, $(BENCHMARKS))
+REDRUNS = $(patsubst %, run-red-%, $(BENCHMARKS))
 TIME = time -f "\ttime: %U"
 ELITE = $(ELITE_ROOT)/compiler/elite
+REDEMU = $(ELITE_ROOT)/emulator/redemu
 
 .PHONY: all
-all: $(CS)
+all: $(CS) $(REDS)
 
 .PHONY: run-c
 run-c: $(CRUNS)
 
+.PHONY: run-red
+run-red: $(REDRUNS)
+
 $(ELITE):
 	make -C $(ELITE_ROOT)/compiler
+
+$(REDEMU):
+	make -C $(ELITE_ROOT)/emulator
+
+%.red: %.erl $(ELITE)
+	$(ELITE) -b $< > $@
 
 c-%: %.erl $(ELITE)
 	$(ELITE) -c build-$@ $<
@@ -22,6 +34,9 @@ c-%: %.erl $(ELITE)
 run-c-%: c-%
 	@echo "$<:" && $(TIME) ./$< && echo
 
+run-red-%: %.red $(REDEMU)
+	@echo "$<:" && $(REDEMU) ./$< && echo
+
 .PHONY: clean
 clean:
-	rm -f $(CS)
+	rm -f $(CS) $(REDS)

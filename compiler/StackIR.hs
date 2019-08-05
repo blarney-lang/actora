@@ -53,7 +53,6 @@ data Instr =
   | CALL InstrPtr
   | ICALL
   | COPY StackOffset
-  | COPY2 StackOffset StackOffset
   | JUMP InstrPtr
   | IJUMP
   | SLIDE PopAmount NumAtoms

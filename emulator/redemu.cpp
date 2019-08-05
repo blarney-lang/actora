@@ -17,7 +17,6 @@
 #define I_SetUpper  0b1000000011
 #define I_Slide     0b1000000100
 #define I_Copy      0b1000000101
-#define I_Copy2     0b1000000110
 #define I_Call      0b1000001000
 #define I_ICall     0b1000001001
 #define I_Jump      0b1000001010
@@ -63,14 +62,6 @@ inline uint32_t getSlideDist(uint32_t instr)
 // Get length from Slide instruction
 inline uint32_t getSlideLen(uint32_t instr)
   { return instr & 0x3f; }
-
-// Get first offset from Copy2 instruction
-inline uint32_t getCopy2First(uint32_t instr)
-  { return (instr >> 8) & 0xff; }
-
-// Get second offset from Copy2 instruction
-inline uint32_t getCopy2Second(uint32_t instr)
-  { return instr & 0xff; }
 
 // Get pop flag from Load instruction
 inline bool getLoadPopFlag(uint32_t instr)
@@ -399,7 +390,7 @@ uint32_t run(Bytecode* code, State* s)
         s->stack[s->sp - dist - i] = s->stack[s->sp - i];
       s->sp -= dist;
       s->pc++;
-      s->cycles += len == 0 ? 1 : (len+1)/2;
+      s->cycles += len;
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);
@@ -407,19 +398,6 @@ uint32_t run(Bytecode* code, State* s)
       if (s->sp >= STACK_SIZE) return EStackOverflow;
       s->stack[s->sp] = s->stack[s->sp - 1 - offset];
       s->sp++;
-      s->pc++;
-      s->cycles++;
-    }
-    else if (op == I_Copy2) {
-      uint32_t offset1 = getCopy2First(instr);
-      uint32_t offset2 = getCopy2Second(instr);
-      if (offset1 >= s->sp) return EStackIndex;
-      if (s->sp >= STACK_SIZE) return EStackOverflow;
-      if (offset2 >= s->sp) return EStackIndex;
-      if (s->sp >= STACK_SIZE) return EStackOverflow;
-      s->stack[s->sp] = s->stack[s->sp - 1 - offset1];
-      s->stack[s->sp+1] = s->stack[s->sp - 1 - offset2];
-      s->sp += 2;
       s->pc++;
       s->cycles++;
     }

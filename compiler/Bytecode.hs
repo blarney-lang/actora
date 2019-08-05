@@ -110,8 +110,6 @@ encode instrs =
           unsigned 6 n
         COPY n ->
           unsigned 10 0b1000000101 <.> unsigned 16 n
-        COPY2 n m ->
-          unsigned 10 0b1000000110 <.> unsigned 8 n <.> unsigned 8 m
         CALL (InstrAddr addr) -> 
           unsigned 10 0b1000001000 <.> unsigned 16 addr
         ICALL ->
