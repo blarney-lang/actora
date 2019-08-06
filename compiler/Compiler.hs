@@ -564,8 +564,9 @@ compile modName decls =
     -- Peephole optimisations / simplifications
     peephole :: [Instr] -> [Instr]
     peephole [] = []
+    peephole (SLIDE 0 n : rest) = peephole rest
     peephole (SLIDE_JUMP dist n dest:rest) =
-      [SLIDE dist n, JUMP dest] ++ peephole rest
+      peephole ([SLIDE dist n, JUMP dest] ++ rest)
     peephole (PUSH (INT i):rest)
       | (i >= 2^15 || i < -(2^15)) =
           PUSH (INT (lowerBits i)) : SETU (upperBits i) : peephole rest
