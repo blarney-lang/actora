@@ -1,16 +1,16 @@
 ```
            25---------------------15----------------------+
-PushInt     | 1000000000           | data<16>             |
+PushIPtr    | 1000000000           | data<16>             |
             +----------------------+----------------------+
-PushAtom    | 1000000001           | data<16>             |
+PushInt     | 1000000001           | data<16>             |
             +----------------------+----------------------+
-PushIPtr    | 1000000010           | data<16>             |
-            +----------------------+----------------------+
-SetUpper    | 1000000011           | data<16>             |
+PushAtom    | 1000000010           | data<16>             |
             +----------------------+-------------5--------+
 Slide       | 1000000100           | dist<10>    | n<6>   |
+            +---------------------------------------------+
+Return      | 1000000101           | dist<10>    | 000001 |
             +----------------------+----------------------+
-Copy        | 1000000101           | n<16>                |
+Copy        | 1000000110           | n<16>                |
             +----------------------+-----------7----------+
 Call        | 1000001000           | addr<16>             |
             +----------------------+----------------------+
@@ -19,33 +19,44 @@ ICall       | 1000001001           |                      |
 Jump        | 1000001010           | addr<16>             |
             +----------------------+----------------------+
 IJump       | 1000001011           |                      |
-            +----------------------+----------------------+
-Return      | 1000001100           | pop<16>              |
             +----------------------+-------14-------------+
 Load        | 1000001101           | pop<1> |             |
             +----------------------+-----13------7------1-+
 Store       | 1000001110           | k<2> | a<6> | n<6> | |
             +----------------------+----------------------+
-Add         | 1000010000           |                      |
+Halt        | 1000001111           | error<16>            |
             +----------------------+----------------------+
-AddImm      | 1000010001           | imm<16>              |
+Add         | 1000100000           |                      |
             +----------------------+----------------------+
-Sub         | 1000010010           |                      |
+AddImm      | 1000100001           | imm<16>              |
             +----------------------+----------------------+
-SubImm      | 1000010011           | imm<16>              |
+Sub         | 1000100010           |                      |
             +----------------------+----------------------+
-Eq          | 1000010100           |                      |
+SubImm      | 1000100011           | imm<16>              |
             +----------------------+----------------------+
-NotEq       | 1000010101           |                      |
+SetUpper    | 1000100101           | data<16>             |
             +----------------------+----------------------+
-Less        | 1000010110           |                      |
+Eq          | 1000110000           |                      |
             +----------------------+----------------------+
-LessEq      | 1000010111           |                      |
+NotEq       | 1000110010           |                      |
             +----------------------+----------------------+
-Halt        | 1000100000           | error<16>            |
+Less        | 1000110100           |                      |
+            +----------------------+----------------------+
+LessEq      | 1000110110           |                      |
             +---24-------23---------14-------9------------+
 BranchPop   | 0 | neg<1> | cond<9>  | pop<5> | offset<10> |
             +---+--------+----------+--------+------------+
+```
+
+## PushIPtr
+
+Push a zero-extended instruction pointer onto the stack.
+
+```
+25          15         
++------------+----------+
+| 1000000000 | data<16> |
++------------+----------+
 ```
 
 ## PushInt
@@ -55,7 +66,7 @@ Push a sign-extended integer onto the stack.
 ```
 25          15         
 +------------+----------+
-| 1000000000 | data<16> |
+| 1000000001 | data<16> |
 +------------+----------+
 ```
 
@@ -66,30 +77,7 @@ Push a zero-extended atom onto the stack.
 ```
 25          15         
 +------------+----------+
-| 1000000001 | data<16> |
-+------------+----------+
-```
-
-## PushIPtr
-
-Push a zero-extended instruction pointer onto the stack.
-
-```
-25          15         
-+------------+----------+
 | 1000000010 | data<16> |
-+------------+----------+
-```
-
-## SetUpper
-
-Overwrite the upper 16 bits of the top stack element with the given
-data.
-
-```
-25          15         
-+------------+----------+
-| 1000000011 | data<16> |
 +------------+----------+
 ```
 
@@ -104,6 +92,21 @@ Slide the top `n` stack elements down the stack by `dist` positions.
 +------------+----------+------+
 ```
 
+## Return
+
+Pop address from return stack and jump to it.  Also slide top stack
+element any number of places down the stack.
+
+```
+25          15     
++------------+----------+--------+
+| 1000000101 | dist<10> | 000001 |
++------------+----------+--------+
+```
+
+Not the similarity to the Slide instruction, both in encoding and
+semantics.
+
 ## Copy
 
 Push the nth element from the stop of the stack onto the stack.
@@ -111,7 +114,7 @@ Push the nth element from the stop of the stack onto the stack.
 ```
 25          15      
 +------------+-------+
-| 1000000101 | n<16> |
+| 1000000110 | n<16> |
 +------------+-------+
 ```
 
@@ -179,28 +182,18 @@ negated using the `neg` bit, has the following format.
 ```
 8     5          
 +-----+----------+
-| 000 | data<6>  |  Is top an atom with value == zeroExtend(data)?
+| 000 |          |  Is top a function pointer?
 +-----+----------+
 | 001 | data<6>  |  Is top an int with value == signExtend(data)?
 +-----+----------+
-| 010 |          |  Is top a pointer to a cons constructor?
+| 010 | data<6>  |  Is top an atom with value == zeroExtend(data)?
 +-----+----------+
-| 011 | len<6>   |  Is top a pointer to a tuple of given length?
+| 100 | 000010   |  Is top a pointer to a cons constructor?
 +-----+----------+
-| 100 | arity<6> |  Is top a pointer to a closure of given arity?
+| 101 | len<6>   |  Is top a pointer to a tuple of given length?
 +-----+----------+
-```
-
-## Return
-
-Pop address from return stack and jump to it.  Also pop any number
-from elements from the value stack.
-
-```
-25          15     
-+------------+---------+
-| 1000001100 | pop<16> |
-+------------+---------+
+| 110 | arity<6> |  Is top a pointer to a closure of given arity?
++-----+----------+
 ```
 
 ## Load
@@ -243,7 +236,7 @@ Replace the top two stack elements with their sum.
 ```
 25          15     
 +------------+------------+
-| 1000010000 | unused<16> |
+| 1000100000 | unused<16> |
 +------------+------------+
 ```
 
@@ -254,7 +247,7 @@ Add the sign-extended immediate to the top stack element.
 ```
 25          15     
 +------------+----------+
-| 1000010001 | data<16> |
+| 1000100001 | data<16> |
 +------------+----------+
 ```
 
@@ -265,7 +258,7 @@ Replace the top two stack elements with their difference.
 ```
 25          15     
 +------------+------------+
-| 1000010010 | unused<16> |
+| 1000100010 | unused<16> |
 +------------+------------+
 ```
 
@@ -276,7 +269,7 @@ Subtract the sign-extended immediate from the top stack element.
 ```
 25          15     
 +------------+----------+
-| 1000010011 | data<16> |
+| 1000100011 | data<16> |
 +------------+----------+
 ```
 
@@ -287,7 +280,7 @@ Equality comparison>
 ```
 25          15
 +------------+------------+
-| 1000010100 | unused<16> |
+| 1000110000 | unused<16> |
 +------------+------------+
 ```
 
@@ -298,7 +291,7 @@ Disequality comparison.
 ```
 25          15
 +------------+------------+
-| 1000010101 | unused<16> |
+| 1000110010 | unused<16> |
 +------------+------------+
 ```
 
@@ -309,7 +302,7 @@ Integer comparison.
 ```
 25          15
 +------------+------------+
-| 1000010110 | unused<16> |
+| 1000110100 | unused<16> |
 +------------+------------+
 ```
 
@@ -320,8 +313,20 @@ Integer comparison.
 ```
 25          15
 +------------+------------+
-| 1000010111 | unused<16> |
+| 1000110110 | unused<16> |
 +------------+------------+
+```
+
+## SetUpper
+
+Overwrite the upper 16 bits of the top stack element with the given
+data.
+
+```
+25          15         
++------------+----------+
+| 1000100101 | data<16> |
++------------+----------+
 ```
 
 ## Halt
@@ -331,7 +336,7 @@ Terminate with the given error code.
 ```
 25          15
 +------------+------------+
-| 1000100000 | error<16>  |
+| 1000001111 | error<16>  |
 +------------+------------+
 ```
 

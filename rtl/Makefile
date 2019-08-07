@@ -3,7 +3,7 @@ BLC = $(BLARNEY_ROOT)/Scripts/blc
 
 .PHONEY: all
 all:
-	$(BLC) Stack.hs
+	$(BLC) Main.hs
 
 clean:
-	rm -rf *.o *.hi Stack Stack-Verilog
+	rm -rf *.o *.hi Main Stack-Verilog

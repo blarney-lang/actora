@@ -11,34 +11,28 @@
 // Instruction decoding
 // ====================
 
-#define I_PushInt   0b1000000000
-#define I_PushAtom  0b1000000001
-#define I_PushIPtr  0b1000000010
-#define I_SetUpper  0b1000000011
+#define I_PushIPtr  0b1000000000
+#define I_PushInt   0b1000000001
+#define I_PushAtom  0b1000000010
 #define I_Slide     0b1000000100
-#define I_Copy      0b1000000101
+#define I_Return    0b1000000101
+#define I_Copy      0b1000000110
 #define I_Call      0b1000001000
 #define I_ICall     0b1000001001
 #define I_Jump      0b1000001010
 #define I_IJump     0b1000001011
-#define I_Return    0b1000001100
 #define I_Load      0b1000001101
 #define I_Store     0b1000001110
-#define I_Add       0b1000010000
-#define I_AddImm    0b1000010001
-#define I_Sub       0b1000010010
-#define I_SubImm    0b1000010011
-#define I_Eq        0b1000010100
-#define I_NotEq     0b1000010101
-#define I_Less      0b1000010110
-#define I_LessEq    0b1000010111
-#define I_Halt      0b1000100000
-
-#define C_IsAtom    0b000
-#define C_IsInt     0b001
-#define C_IsCons    0b010
-#define C_IsTuple   0b011
-#define C_IsClosure 0b100
+#define I_Halt      0b1000001111
+#define I_Add       0b1000100000
+#define I_AddImm    0b1000100001
+#define I_Sub       0b1000100010
+#define I_SubImm    0b1000100011
+#define I_SetUpper  0b1000100101
+#define I_Eq        0b1000110000
+#define I_NotEq     0b1000110010
+#define I_Less      0b1000110100
+#define I_LessEq    0b1000110110
 
 // Get 10-bit opcode field from instruction
 inline uint32_t getOpcode(uint32_t instr)
@@ -195,13 +189,13 @@ void loadBytecode(FILE* fp, Bytecode* code)
 
 // Cell kind
 enum CellKind {
-  FUN         = 0,
-  INT         = 1,
-  ATOM        = 2,
-  PTR_CONS    = 3,
-  PTR_TUPLE   = 4,
-  PTR_CLOSURE = 5,
-  GC          = 6
+  FUN         = 0b000,
+  INT         = 0b001,
+  ATOM        = 0b010,
+  PTR_CONS    = 0b100,
+  PTR_TUPLE   = 0b101,
+  PTR_CLOSURE = 0b110,
+  GC          = 0b111
 };
 
 // Is cell kind a pointer?
@@ -324,25 +318,28 @@ uint32_t run(Bytecode* code, State* s)
       uint32_t neg, condKind, condArg, pop, offset;
       decodeBranchPop(instr, &neg, &condKind, &condArg, &pop, &offset);
       bool branch = false;
-      if (condKind == 0b000) {
+      if (condKind == FUN) {
+        branch = top.tag.kind == FUN;
+      }
+      if (condKind == ATOM) {
         // Atom
         branch = top.tag.kind == ATOM && top.val == condArg;
       }
-      else if (condKind == 0b001) {
+      else if (condKind == INT) {
         // Integer
         uint32_t condVal = condArg;
         if (condVal & 0x20) condVal |= 0xfffffc00;
         branch = top.tag.kind == INT && top.val == condVal;
       }
-      else if (condKind == 0b010) {
+      else if (condKind == PTR_CONS) {
         // Cons pointer
         branch = top.tag.kind == PTR_CONS;
       }
-      else if (condKind == 0b011) {
+      else if (condKind == PTR_TUPLE) {
         // Tuple pointer
         branch = top.tag.kind == PTR_TUPLE && top.tag.len == condArg;
       }
-      else if (condKind == 0b100) {
+      else if (condKind == PTR_CLOSURE) {
         // Closure pointer
         branch = top.tag.kind == PTR_CLOSURE && top.tag.arity == condArg;
       }
@@ -392,6 +389,16 @@ uint32_t run(Bytecode* code, State* s)
       s->pc++;
       s->cycles += len;
     }
+    else if (op == I_Return) {
+      uint32_t dist = getSlideDist(instr);
+      if (s->rp == 0) return EStackUnderflow;
+      s->pc = s->retStack[s->rp-1];
+      s->rp--;
+      Cell top = s->stack[s->sp-1];
+      s->sp -= dist;
+      s->stack[s->sp++] = top;
+      s->cycles++;
+    }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);
       if (offset >= s->sp) return EStackIndex;
@@ -428,17 +435,6 @@ uint32_t run(Bytecode* code, State* s)
       if (top.tag.kind != FUN) return EJumpAddr;
       s->pc = top.val;
       s->sp--;
-      s->cycles++;
-    }
-    else if (op == I_Return) {
-      uint32_t pop = getOperand(instr);
-      if (pop > s->sp) return EStackUnderflow;
-      if (s->rp == 0) return EStackUnderflow;
-      s->pc = s->retStack[s->rp-1];
-      s->rp--;
-      Cell top = s->stack[s->sp-1];
-      s->sp -= pop;
-      s->stack[s->sp++] = top;
       s->cycles++;
     }
     else if (op == I_Load) {

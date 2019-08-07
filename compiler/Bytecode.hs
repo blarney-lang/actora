@@ -96,20 +96,20 @@ encode instrs =
     encOne :: InstrAddr -> Instr -> Maybe BV
     encOne myAddr instr =
       case instr of
-        PUSH (INT i) ->
-          unsigned 10 0b1000000000 <.> signed 16 i
-        PUSH (ATOM str) ->
-          unsigned 10 0b1000000001 <.> unsigned 16 (atomMap M.! str)
         PUSH (FUN (InstrAddr addr)) ->
-          unsigned 10 0b1000000010 <.> unsigned 16 addr
+          unsigned 10 0b1000000000 <.> unsigned 16 addr
+        PUSH (INT i) ->
+          unsigned 10 0b1000000001 <.> signed 16 i
+        PUSH (ATOM str) ->
+          unsigned 10 0b1000000010 <.> unsigned 16 (atomMap M.! str)
         SETU val ->
-          unsigned 10 0b1000000011 <.> unsigned 16 val
+          unsigned 10 0b1000100101 <.> unsigned 16 val
         SLIDE dist n ->
           unsigned 10 0b1000000100 <.>
           unsigned 10 dist <.>
           unsigned 6 n
         COPY n ->
-          unsigned 10 0b1000000101 <.> unsigned 16 n
+          unsigned 10 0b1000000110 <.> unsigned 16 n
         CALL (InstrAddr addr) -> 
           unsigned 10 0b1000001000 <.> unsigned 16 addr
         ICALL ->
@@ -119,7 +119,7 @@ encode instrs =
         IJUMP ->
           unsigned 10 0b1000001011 <.> unsigned 16 0
         RETURN pop ->
-          unsigned 10 0b1000001100 <.> unsigned 16 pop
+          unsigned 10 0b1000000101 <.> unsigned 10 pop <.> unsigned 6 1
         LOAD pop ->
           unsigned 10 0b1000001101 <.>
           unsigned 1 (if pop then 1 else 0) <.>
@@ -140,23 +140,23 @@ encode instrs =
                   PtrTuple -> 0
                   PtrApp n -> n
         PRIM PrimAdd ->
-          unsigned 10 0b1000010000 <.> unsigned 16 0
+          unsigned 10 0b1000100000 <.> unsigned 16 0
         PRIM (PrimAddImm imm) ->
-          unsigned 10 0b1000010001 <.> signed 16 imm
+          unsigned 10 0b1000100001 <.> signed 16 imm
         PRIM PrimSub ->
-          unsigned 10 0b1000010010 <.> unsigned 16 0
+          unsigned 10 0b1000100010 <.> unsigned 16 0
         PRIM (PrimSubImm imm) ->
-          unsigned 10 0b1000010011 <.> signed 16 imm
+          unsigned 10 0b1000100011 <.> signed 16 imm
         PRIM PrimEq ->
-          unsigned 10 0b1000010100 <.> unsigned 16 0
+          unsigned 10 0b1000110000 <.> unsigned 16 0
         PRIM PrimNotEq ->
-          unsigned 10 0b1000010101 <.> unsigned 16 0
+          unsigned 10 0b1000110010 <.> unsigned 16 0
         PRIM PrimLess ->
-          unsigned 10 0b1000010110 <.> unsigned 16 0
+          unsigned 10 0b1000110100 <.> unsigned 16 0
         PRIM PrimLessEq ->
-          unsigned 10 0b1000010111 <.> unsigned 16 0
+          unsigned 10 0b1000110110 <.> unsigned 16 0
         HALT err ->
-            unsigned 10 0b1000100000 <.> unsigned 16 (errorCode err)
+          unsigned 10 0b1000001111 <.> unsigned 16 (errorCode err)
         BRANCH cond pop (InstrAddr addr) ->
           unsigned 1 0 <.>
           unsigned 1 neg <.>
@@ -167,16 +167,16 @@ encode instrs =
             neg = case fst cond of { Pos -> 0; Neg -> 1}
             cond' = case snd cond of
                       IsAtom str -> 
-                        unsigned 3 0b000 <.>
+                        unsigned 3 0b010 <.>
                         unsigned 6 (atomMap M.! str)
                       IsInt val ->
                         unsigned 3 0b001 <.> signed 6 val
                       IsCons ->
-                        unsigned 3 0b010 <.> unsigned 6 2
+                        unsigned 3 0b100 <.> unsigned 6 2
                       IsTuple len ->
-                        unsigned 3 0b011 <.> unsigned 6 len
+                        unsigned 3 0b101 <.> unsigned 6 len
                       IsApp n ->
-                        unsigned 3 0b100 <.> unsigned 6 n
+                        unsigned 3 0b110 <.> unsigned 6 n
         other -> error ("Unknown instruction " ++ show other)
 
 -- Encode error string

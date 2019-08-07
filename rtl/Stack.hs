@@ -1,6 +1,6 @@
+module Stack where
+
 -- This module implements a full-throughput dual-port stack.
--- The top two elements are stored in registers, and the
--- remaining elements in a block RAM.
 
 import Blarney
 import Blarney.RAM
@@ -118,8 +118,8 @@ makeStack = do
 -- Test bench
 -- ==========
 
-top :: Module ()
-top = do
+testBench :: Module ()
+testBench = do
   -- Create 256-element stack
   stk :: Stack 8 (Bit 8) <- makeStack
 
@@ -197,5 +197,9 @@ top = do
 -- Code generation
 -- ===============
 
-main :: IO ()
-main = writeVerilogTop top "top" "Stack-Verilog/"
+genTestBench :: IO ()
+genTestBench =
+  writeVerilogTop
+    testBench
+    "testBench"
+    "Stack-Verilog/"
