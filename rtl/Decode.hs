@@ -52,25 +52,25 @@ opcode = range @25 @16
 
 -- Many instructions contain a 16-bit operand
 operand :: Instr -> Bit 16
-operand = range @15 0
+operand = range @15 @0
 
 -- Is it a Push instruction?
 isPush :: Instr -> Bit 1
-isPush i = index @25 i .&. range @5 @2 (i.opcode) .==. 0b0000
+isPush i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0000)
 
 -- Determine value to push
 getPushVal :: Instr -> Cell
 getPushVal i =
   Cell {
-    tag = range @1 @0 i
-    content = signExtend (sign # i.operand)
+    tag = 0b0 # range @1 @0 (i.opcode)
+  , content = signExtend (sign # (i.operand))
   }
   where
     sign = index @0 i ? (index @15 i, 0)
 
 -- Is it a Slide or Return instruction?
 isSlide :: Instr -> Bit 1
-isSlide = index @25 i .&. range @5 @1 (i.opcode) .==. 0b00010
+isSlide i = index @25 i .&. (range @5 @1 (i.opcode) .==. 0b00010)
 
 -- Assuming isSlide, is it a Return?
 isReturn :: Instr -> Bit 1
@@ -81,16 +81,16 @@ getSlideDist :: Instr -> Bit 10
 getSlideDist = range @15 @6
 
 -- Determine length of Slide
-getSlideLen :: Instr -> Bit 10
+getSlideLen :: Instr -> Bit 6
 getSlideLen = range @5 @0
 
 -- Is it a Copy instruction?
 isCopy :: Instr -> Bit 1
-isCopy i = index @25 i .&. range @5 @0 (i.opcode) .==. 0b000110
+isCopy i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b000110)
 
 -- Is it a Jump, IJump, Call, or ICall instruction?
 isControl :: Instr -> Bit 1
-isControl i = index @25 i .&. range @5 @2 (i.opcode) .==. 0b0010
+isControl i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0010)
 
 -- Assuming isControl, is it an Jump or IJump?
 isJump :: Instr -> Bit 1
@@ -102,23 +102,23 @@ isIndirect = index @16
 
 -- Is it a Load instruction?
 isLoad :: Instr -> Bit 1
-isLoad i = index @25 i .&. range @5 @0 (i.opcode) .==. 0b001101
+isLoad i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001101)
 
 -- Is it a Store instruction?
 isStore :: Instr -> Bit 1
-isStore i = index @25 i .&. range @5 @0 (i.opcode) .==. 0b001110
+isStore i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001110)
 
 -- Is it a Halt instuction?
 isHalt :: Instr -> Bit 1
-isHalt i = index @25 i .&. range @5 @0 (i.opcode) .==. 0b001111
+isHalt i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001111)
 
 -- Is it a primitive function?
 isPrim :: Instr -> Bit 1
-isPrim = index @25 i .&. index @5 (i.opcode)
+isPrim i = index @25 i .&. index @5 (i.opcode)
 
--- Assuming isPrim, Is it an arithmetic instruction?
+-- Assuming isPrim, is it an arithmetic instruction?
 isArith :: Instr -> Bit 1
-isArith = inv (index @4 (i.opcode))
+isArith i = inv (index @4 (i.opcode))
 
 -- Assuming isPrim, is it a comparison?
 isComparison :: Instr -> Bit 1
@@ -142,7 +142,7 @@ isSetUpper i = range @3 @1 (i.opcode) .==. 0b010
 
 -- Assuming isComparison, is it an Eq or NotEq?
 isEq :: Instr -> Bit 1
-isEq i = index @3 @2 (i.opcode) .==. 0b00
+isEq i = range @3 @2 (i.opcode) .==. 0b00
 
 -- Assuming isEq, is it a NotEq?
 isNotEq :: Instr -> Bit 1
@@ -158,7 +158,7 @@ isLessEq i = range @3 @1 (i.opcode) .==. 0b011
 
 -- Is it a BranchPop instruction?
 isBranchPop :: Instr -> Bit 1
-isBranchPop = inv (index @25 i)
+isBranchPop i = inv (index @25 i)
 
 -- Format of BranchPop instruction
 data BranchPop =
