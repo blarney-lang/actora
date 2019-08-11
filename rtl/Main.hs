@@ -1,7 +1,8 @@
 import Blarney
 import Stack
-import Decode
+import Core
 
 main :: IO ()
 main = do
   Stack.genTestBench
+  Core.genCore

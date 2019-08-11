@@ -387,7 +387,7 @@ uint32_t run(Bytecode* code, State* s)
         s->stack[s->sp - dist - i] = s->stack[s->sp - i];
       s->sp -= dist;
       s->pc++;
-      s->cycles += len;
+      s->cycles += len == 1 ? 2 : len;
     }
     else if (op == I_Return) {
       uint32_t dist = getSlideDist(instr);
@@ -397,7 +397,7 @@ uint32_t run(Bytecode* code, State* s)
       Cell top = s->stack[s->sp-1];
       s->sp -= dist;
       s->stack[s->sp++] = top;
-      s->cycles++;
+      s->cycles+=2;
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);

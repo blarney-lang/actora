@@ -2,8 +2,11 @@ BLARNEY_ROOT = $(ELITE_ROOT)/blarney
 BLC = $(BLARNEY_ROOT)/Scripts/blc
 
 .PHONEY: all
-all:
+all: Config.h
 	$(BLC) Main.hs
 
+Config.h: Config.py
+	./Config.py hw-cpp > Config.h
+
 clean:
-	rm -rf *.o *.hi Main Stack-Verilog
+	rm -rf *.o *.hi Main *-Verilog Config.h
