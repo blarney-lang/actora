@@ -4,6 +4,7 @@ module Decode where
 -- See doc/ISA.md for more details.
 
 import Blarney
+import Types
 
 -- Stack/Heap cells
 -- ================
@@ -39,6 +40,10 @@ getObjectLen cell = range @31 @26 (cell.content)
 -- arguments still need to be applied.
 getClosureArity :: Cell -> Bit 6
 getClosureArity cell = range @25 @20 (cell.content)
+
+-- Extract pointer value from cell
+getObjectPtr :: Cell -> HeapPtr
+getObjectPtr cell = truncate (range @19 @0 (cell.content))
 
 -- Instructions
 -- ============
@@ -104,9 +109,34 @@ isIndirect = index @16
 isLoad :: Instr -> Bit 1
 isLoad i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001101)
 
+-- Assuming isLoad, should the pointer be popped before loading?
+isLoadPop :: Instr -> Bit 1
+isLoadPop = index @15
+
 -- Is it a Store instruction?
 isStore :: Instr -> Bit 1
 isStore i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001110)
+
+-- What's the tag for data being stored?
+getStoreTag :: Instr -> Tag
+getStoreTag i = (1 :: Bit 1) # range @15 @14 i
+
+-- What's the arity of the closure being stored?
+getStoreArity :: Instr -> Bit 6
+getStoreArity = range @13 @8
+
+-- What's the length of the object being stored?
+getStoreLen :: Instr -> Bit 6
+getStoreLen = range @7 @2
+
+-- What's the pointer for given store instruction and heap pointer?
+makeStorePtr :: Instr -> HeapPtr -> Cell
+makeStorePtr i p =
+  Cell {
+    tag = i.getStoreTag
+  , content =
+      (i.getStoreLen) # (i.getStoreArity) # 0 # p
+  }
 
 -- Is it a Halt instuction?
 isHalt :: Instr -> Bit 1

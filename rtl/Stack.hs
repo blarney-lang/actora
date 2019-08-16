@@ -64,6 +64,9 @@ makeStack = do
     sp <== (sp.val - popWire.val) + inc
     sp1 <== (sp1.val - popWire.val) + inc
 
+    -- Commonly address for ram1
+    let addr1 = sp1.val - copyWire.val
+
     -- Pushing and not popping
     when (pushOrCopy .&. popWire.active.inv) do
       if push1Wire.active
@@ -77,10 +80,10 @@ makeStack = do
       if push2Wire.active
         then do
           reg2 <== push2Wire.val
-          store ram1 (sp1.val) topVal1
+          store ram1 addr1 topVal1
         else do
           reg2 <== topVal1
-          load ram1 (sp1.val - copyWire.val)
+          load ram1 addr1
       store ram2 (sp.val) topVal2
 
     -- Popping and not pushing

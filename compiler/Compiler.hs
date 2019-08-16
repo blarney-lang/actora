@@ -564,6 +564,7 @@ compile modName decls =
     -- Peephole optimisations / simplifications
     peephole :: [Instr] -> [Instr]
     peephole [] = []
+    peephole (STORE 0 n : rest) = error "Store of length 0 not allowed"
     peephole (SLIDE 0 n : rest) = peephole rest
     peephole (SLIDE_JUMP dist n dest:rest) =
       peephole ([SLIDE dist n, JUMP dest] ++ rest)
