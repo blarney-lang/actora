@@ -34,12 +34,21 @@ makeCore debugIn = do
   -- Debug output queue
   debugOut :: Queue (Bit 8) <- makeShiftQueue 1
 
-  -- Program counter
-  pc :: Reg InstrPtr <- makeReg ones
+  -- Program counter of instruction in stage 2
+  pc2 :: Reg InstrPtr <- makeReg ones
+
+  -- Program counter of instruciton in stage 3
+  pc :: Reg InstrPtr <- makeReg dontCare
+
+  -- Stall pipeline
+  stall :: Wire (Bit 1) <- makeWire false
+  let stallReg = reg false (stall.val)
 
   -- Pointer to next instruction to fetch
-  -- (Defaults to pc.val + 1)
-  nextPC :: Wire InstrPtr <- makeWire (pc.val + 1)
+  nextPC :: Wire InstrPtr <- makeWire (pc2.val + (stall.val ? (0, 1)))
+
+  -- Trigger decode stage
+  decode :: Reg (Bit 1) <- makeReg false
 
   -- Trigger execute stage
   execute :: Reg (Bit 1) <- makeDReg false
@@ -49,10 +58,6 @@ makeCore debugIn = do
 
   -- Pointer to end of heap
   hp :: Reg (Bit LogHeapSize) <- makeReg 0
-
-  -- Stall pipeline
-  stall :: Wire (Bit 1) <- makeWire false
-  let stallReg = reg false (stall.val)
 
   -- Temporary state for Slide/Return instruction
   retAddr :: Reg InstrPtr <- makeReg dontCare
@@ -77,25 +82,42 @@ makeCore debugIn = do
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
   doPop :: Reg (Bit 1) <- makeReg dontCare
 
--- TODO: remove
-  cycleCount :: Reg (Bit 32) <- makeReg 0
-  always do cycleCount <== cycleCount.val + 1
-
   -- Stage 1: Fetch
   -- ==============
+
+  -- Flush condition
+  let flush = nextPC.active
 
   -- Fetch next instruction
   always do
     load instrMem (nextPC.val)
 
-    -- When not stalling, trigger execute stage and update PC
+    -- When not stalling, enable decode stage and update PC
     when (stall.val.inv) do
-      execute <== true
-      pc <== nextPC.val
+      decode <== true
+      pc2 <== nextPC.val
 
-  let instr = instrMem.out
+    -- When flushing, disable decode stage
+    -- Note: must not stall and flush at the same time
+    when flush do
+      decode <== false
 
-  -- Stage 2: Execute
+  let instr2 = instrMem.out
+
+  -- Stage 2: Decode
+  -- ===============
+
+  always do
+    -- When decode stage is enabled
+    when (decode.val) do
+      -- When not stalling and not flushing, trigger execute stage
+      when (stall.val.inv .&. flush.inv) do
+        pc <== pc2.val
+        execute <== true
+
+  let instr = instr2.buffer
+
+  -- Stage 3: Execute
   -- ================
 
   -- First (any maybe only) cycle of instruction execution
