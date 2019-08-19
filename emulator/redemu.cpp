@@ -32,7 +32,7 @@
 #define I_Eq        0b1000110000
 #define I_NotEq     0b1000110010
 #define I_Less      0b1000110100
-#define I_LessEq    0b1000110110
+#define I_GreaterEq 0b1000110110
 
 // Get 10-bit opcode field from instruction
 inline uint32_t getOpcode(uint32_t instr)
@@ -390,7 +390,7 @@ uint32_t run(Bytecode* code, State* s)
       s->cycles += len == 1 ? 2 : len;
     }
     else if (op == I_Return) {
-      uint32_t dist = getSlideDist(instr);
+      uint32_t dist = 1+getSlideDist(instr);
       if (s->rp == 0) return EStackUnderflow;
       s->pc = s->retStack[s->rp-1];
       s->rp--;
@@ -503,7 +503,7 @@ uint32_t run(Bytecode* code, State* s)
       s->cycles++;
     }
     else if (op == I_Eq || op == I_NotEq ||
-             op == I_Less || op == I_LessEq) {
+             op == I_Less || op == I_GreaterEq) {
       if (s->sp < 2) return EStackIndex;
       Cell* a = &s->stack[s->sp-1];
       Cell* b = &s->stack[s->sp-2];
@@ -515,8 +515,8 @@ uint32_t run(Bytecode* code, State* s)
         b->val = ((int32_t) a->val != (int32_t) b->val) ? 1 : 0;
       else if (op == I_Less)
         b->val = ((int32_t) a->val < (int32_t) b->val) ? 1 : 0;
-      else if (op == I_LessEq)
-        b->val = ((int32_t) a->val <= (int32_t) b->val) ? 1 : 0;
+      else if (op == I_GreaterEq)
+        b->val = ((int32_t) a->val >= (int32_t) b->val) ? 1 : 0;
       s->sp--;
       s->pc++;
       s->cycles++;

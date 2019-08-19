@@ -154,17 +154,17 @@ isArith i = inv (index @4 (i.opcode))
 isComparison :: Instr -> Bit 1
 isComparison i = index @4 (i.opcode)
 
--- Assuming isPrim, is second operand an immediate?
-isImm :: Instr -> Bit 1
-isImm i = index @0 (i.opcode)
+-- Assuming isArith, is it an Add or Sub?
+isAddOrSub :: Instr -> Bit 1
+isAddOrSub i = range @3 @2 (i.opcode) .==. 0b00
 
--- Assuming isArith, is it an Add?
-isAdd :: Instr -> Bit 1
-isAdd i = range @3 @1 (i.opcode) .==. 0b000
-
--- Assuming isArith, is it a Sub?
+-- Assuming isAddOrSub, is it a Sub?
 isSub :: Instr -> Bit 1
-isSub i = range @3 @1 (i.opcode) .==. 0b001
+isSub i = index @1 (i.opcode)
+
+-- Assuming isAddOrSub, is it an Add?
+isAdd :: Instr -> Bit 1
+isAdd i = inv (index @1 (i.opcode))
 
 -- Assuming isArith, is it a SetUpper?
 isSetUpper :: Instr -> Bit 1
@@ -174,17 +174,13 @@ isSetUpper i = range @3 @1 (i.opcode) .==. 0b010
 isEq :: Instr -> Bit 1
 isEq i = range @3 @2 (i.opcode) .==. 0b00
 
--- Assuming isEq, is it a NotEq?
-isNotEq :: Instr -> Bit 1
-isNotEq i = index @1 (i.opcode)
-
--- Assuming isComparison, is it a Less?
+-- Assuming isComparison, is it a Less or GreaterEq?
 isLess :: Instr -> Bit 1
-isLess i = range @3 @1 (i.opcode) .==. 0b010
+isLess i = range @3 @2 (i.opcode) .==. 0b01
 
--- Assuming isComparison, is it a LessEq?
-isLessEq :: Instr -> Bit 1
-isLessEq i = range @3 @1 (i.opcode) .==. 0b011
+-- Assuming isComparison, should comparison be negated?
+isNegCmp :: Instr -> Bit 1
+isNegCmp i = index @1 (i.opcode)
 
 -- Is it a BranchPop instruction?
 isBranchPop :: Instr -> Bit 1

@@ -21,6 +21,7 @@ data Flag =
   | CompileToNIOSII
   | CompileToStackIR
   | CompileToBytecode
+  | CompileToHex
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -35,6 +36,8 @@ options =
       "Genereate stack IR"
   , Option ['b'] [] (NoArg CompileToBytecode)
       "Generate bytecode"
+  , Option ['h'] [] (NoArg CompileToHex)
+      "Generate bytecode (hex format)"
   ]
 
 getOptions :: [String] -> IO ([Flag], [String])
@@ -95,6 +98,11 @@ main = do
       -- Generate bytecode
       when (CompileToBytecode `elem` flags) $ do
         print $ encode $ compile modName prog
+        exitSuccess
+
+      -- Generate bytecode
+      when (CompileToHex `elem` flags) $ do
+        mapM_ putStrLn $ encodeHex $ compile modName prog
         exitSuccess
 
     other -> return ()

@@ -21,6 +21,8 @@ data Stack n a =
     -- Pop any number of items
     -- (can be called in parallel with push1)
   , pop   :: Bit n -> Action ()
+    -- Size of the stack
+  , size  :: Bit n
     -- Top two stack values
   , top1  :: a
   , top2  :: a
@@ -112,10 +114,11 @@ makeStack = do
     Stack {
       push1 = \a -> push1Wire <== a
     , push2 = \a -> push2Wire <== a
-    , copy = \n -> copyWire <== n
-    , pop  = \n -> popWire <== n
-    , top1 = topVal1
-    , top2 = topVal2
+    , copy  = \n -> copyWire <== n
+    , pop   = \n -> popWire <== n
+    , size  = sp.val
+    , top1  = topVal1
+    , top2  = topVal2
     }
 
 -- Test bench

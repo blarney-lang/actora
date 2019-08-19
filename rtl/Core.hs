@@ -29,7 +29,7 @@ makeCore debugIn = do
   rstk :: Stack LogRetStackSize InstrPtr <- makeStack
 
   -- Heap storing pairs of cells
-  (heap :: RAM HeapPtr (Cell, Cell), heap2) <- makeTrueDualRAM
+  heap :: RAM HeapPtr (Cell, Cell) <- makeRAM
 
   -- Debug output queue
   debugOut :: Queue (Bit 8) <- makeShiftQueue 1
@@ -57,6 +57,7 @@ makeCore debugIn = do
   -- Temporary state for Slide/Return instruction
   retAddr :: Reg InstrPtr <- makeReg dontCare
   slideCount <- makeReg dontCare
+  slideOffset :: Reg StackPtr <- makeReg dontCare
 
   -- Temporary registers for Slide instruction
   -- (Storing copies of the top two stack elements)
@@ -64,9 +65,9 @@ makeCore debugIn = do
   slide2 :: Reg Cell <- makeReg dontCare
 
   -- Temporary state for Load instruction
-  loadOdd :: Reg (Bit 1) <- makeReg dontCare
   loadPtr :: Reg HeapPtr <- makeReg dontCare
-  loadCount :: Reg (Bit 6) <- makeReg 0
+  loadCount :: Reg (Bit 6) <- makeReg dontCare
+  loadOdd :: Reg (Bit 1) <- makeReg dontCare
 
   -- Temporary state for Store instruction
   storeLen :: Reg (Bit 6) <- makeReg dontCare
@@ -74,6 +75,11 @@ makeCore debugIn = do
 
   -- Temporary state for BranchPop instruction
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
+  doPop :: Reg (Bit 1) <- makeReg dontCare
+
+-- TODO: remove
+  cycleCount :: Reg (Bit 32) <- makeReg 0
+  always do cycleCount <== cycleCount.val + 1
 
   -- Stage 1: Fetch
   -- ==============
@@ -112,13 +118,20 @@ makeCore debugIn = do
           push1 rstk (pc.val + 1)
         nextPC <== instr.isIndirect ?
           (stk.top1.content.truncate, instr.operand.truncate)
+        when (instr.isIndirect) do
+          pop stk 1
 
       -- Slide/Return instruction
       when (instr.isSlide) do
         slide1 <== stk.top1
         slide2 <== stk.top2
-        pop stk (instr.getSlideDist.zeroExtend)
-        slideCount <== instr.getSlideLen
+        let dist = instr.getSlideDist
+        let len = instr.getSlideLen
+        -- TODO register this sum
+        let popAmount = zeroExtend (dist + len.zeroExtend)
+        pop stk popAmount
+        slideCount <== len
+        slideOffset <== dist.signExtend.inv
         retAddr <== rstk.top1
         stall <== true
 
@@ -126,8 +139,8 @@ makeCore debugIn = do
       when (instr.isLoad) do
         load heap (stk.top1.getObjectPtr)
         loadPtr <== stk.top1.getObjectPtr - 1
+        loadCount <== stk.top1.getObjectLen
         loadOdd <== index @0 (stk.top1.getObjectLen)
-        loadCount <== (0 :: Bit 1) # (stk.top1.getObjectLen.truncateLSB)
         stall <== true
         when (instr.isLoadPop) do
           pop stk 1
@@ -140,42 +153,61 @@ makeCore debugIn = do
       -- BranchPop instruction
       when (instr.isBranchPop) do
         let i :: BranchPop = unpack instr
-        let tagOk = stk.top1.tag .==. i.branchTag
+        let t = stk.top1.tag
+        let tagOk = t .==. i.branchTag
         let valOk =
               select [
-                0b000 --> true
-              , 0b001 --> stk.top1.content .==. i.branchArg.signExtend
-              , 0b010 --> stk.top1.content .==. i.branchArg.zeroExtend
-              , 0b100 --> true
-              , 0b101 --> stk.top1.getObjectLen .==. i.branchArg
-              , 0b110 --> stk.top1.getClosureArity .==. i.branchArg
+                t .==. 0b000 --> true
+              , t .==. 0b001 --> stk.top1.content .==. i.branchArg.signExtend
+              , t .==. 0b010 --> stk.top1.content .==. i.branchArg.zeroExtend
+              , t .==. 0b100 --> true
+              , t .==. 0b101 --> stk.top1.getObjectLen .==. i.branchArg
+              , t .==. 0b110 --> stk.top1.getClosureArity .==. i.branchArg
               ]
         let cond = (tagOk .&. valOk) .^. i.branchNeg
         takeBranch <== cond
+        doPop <== i.branchPop .!=. 0
         stall <== true
 
       -- Primitive instruction
       when (instr.isPrim) do
-        pop stk 1
-
-        -- Arithmetic instruction
-        when (instr.isArith) do
-          let op1 = stk.top1.content
-          let op2 = instr.isImm ? (stk.top2.content, instr.operand.signExtend)
-          let result =
-                select [
-                  (instr.isAdd .|. instr.isSub) -->
-                    (instr.isAdd ? (op1, op1.inv)) + op2 +
-                      zeroExtend (instr.isAdd)
-                , instr.isSetUpper -->
-                    (instr.operand # range @15 @0 op1)
+        let op1 = stk.top1.content
+        let op2 = stk.top2.content
+        -- Top element will be replaced
+        pop stk 2
+        -- Add/sub result
+        let add1 :: Bit 33 = op1.signExtend
+        let add2 :: Bit 33 = op2.signExtend
+        -- TODO: simplify
+        let doAdd :: Bit 1 = instr.isArith .&. instr.isAddOrSub .&. instr.isAdd
+        let addSub = add1 + (doAdd ? (add2, add2.inv))
+                   + (doAdd ? (0, 1))
+        let setUpper = instr.operand # range @15 @0 op1
+        -- Comparison result
+        let eq = addSub .==. 0
+        let lt = index @32 addSub
+        -- Overall result
+        let result =
+              if instr.isArith then 
+                instr.isAddOrSub ? (addSub.truncate, setUpper)
+              else
+                zeroExtend $ select [
+                  instr.isEq --> eq .^. (instr.isNegCmp)
+                , instr.isLess --> lt .^. (instr.isNegCmp)
                 ]
-          push1 stk ((stk.top1) { content = result })
+        push1 stk $
+          Cell {
+            tag = instr.isComparison ? (atomTag, stk.top1.tag)
+          , content = result
+          }
         
       -- Halt instruction
       when (instr.isHalt) do
         if debugOut.notFull
-          then enq debugOut (instr.operand.truncate)
+          then do
+            display "top = " (stk.top1.content)
+            display "stack size = " (stk.size)
+            enq debugOut (instr.operand.truncate)
           else stall <== true
 
   -- Non-first cycle of instruction execution
@@ -185,14 +217,15 @@ makeCore debugIn = do
       when (instrReg.val.isSlide) do
         if slideCount.val .<=. 2
           then do
-            push1 stk (slide1.val)
+            when (range @1 @0 (slideCount.val) .!=. 0) do
+              push1 stk (slide1.val)
             when (index @1 (slideCount.val)) do
               push2 stk (slide2.val)
             when (instrReg.val.isReturn) do
               pop rstk 1
               nextPC <== retAddr.val
           else do
-            copy stk (instrReg.val.getSlideLen.signExtend)
+            copy stk (slideOffset.val)
             slideCount <== slideCount.val - 1
             stall <== true
 
@@ -204,14 +237,14 @@ makeCore debugIn = do
         -- Push second cell, if it exists
         when (loadOdd.val.inv) do
           push2 stk cell2
+        loadOdd <== false
         -- Stall if load is incomplete
-        when (loadCount.val .!=. 0) do
+        when (loadCount.val .>. 2) do
           stall <== true
         -- Load next cell pair
         load heap (loadPtr.val)
-        loadOdd <== false
         loadPtr <== loadPtr.val - 1
-        loadCount <== loadCount.val - 1
+        loadCount <== loadCount.val - 2
 
       -- Store instruction
       when (instrReg.val.isStore) do
@@ -234,8 +267,9 @@ makeCore debugIn = do
       when (instrReg.val.isBranchPop) do
         when (takeBranch.val) do
           let i :: BranchPop = unpack (instrReg.val)
-          pop stk (i.branchPop.zeroExtend)
-          nextPC <== i.branchOffset.zeroExtend
+          when (doPop.val) do
+            pop stk (i.branchPop.zeroExtend)
+          nextPC <== pc.val + i.branchOffset.zeroExtend
 
   return (debugOut.toStream)
 

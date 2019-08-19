@@ -2,6 +2,7 @@
 module Bytecode where
 
 -- Standard imports
+import Numeric
 import Data.Bits
 import qualified Data.Map as M
 
@@ -62,6 +63,25 @@ Just b0 <.> Just b1 =
     width = width b0 + width b1
   , value = (value b0 `shiftL` width b1) .|. value b1
   }
+
+-- Encode error string
+errorCode :: String -> Int
+errorCode "ENone"           = 0
+errorCode "EStackOverflow"  = 1
+errorCode "EHeapOverflow"   = 2
+errorCode "EArith"          = 3
+errorCode "ELoadAddr"       = 4
+errorCode "EJumpAddr"       = 5
+errorCode "EStackIndex"     = 6
+errorCode "EUnknown"        = 7
+errorCode "EInstrIndex"     = 8
+errorCode "EUnknownInstr"   = 9
+errorCode "EStackUnderflow" = 10
+errorCode "EBindFail"       = 16
+errorCode "ECaseFail"       = 17
+errorCode "EEqnFail"        = 18
+errorCode "EApplyFail"      = 19
+errorCode other             = errorCode "EUnknown"
 
 -- Encode stack IR as bytecode
 encode :: [Instr] -> Bytecode
@@ -141,19 +161,19 @@ encode instrs =
                   PtrApp n -> n
         PRIM PrimAdd ->
           unsigned 10 0b1000100000 <.> unsigned 16 0
-        PRIM (PrimAddImm imm) ->
-          unsigned 10 0b1000100001 <.> signed 16 imm
+        --PRIM (PrimAddImm imm) ->
+        --  unsigned 10 0b1000100001 <.> signed 16 imm
         PRIM PrimSub ->
           unsigned 10 0b1000100010 <.> unsigned 16 0
-        PRIM (PrimSubImm imm) ->
-          unsigned 10 0b1000100011 <.> signed 16 imm
+        --PRIM (PrimSubImm imm) ->
+        --  unsigned 10 0b1000100011 <.> signed 16 imm
         PRIM PrimEq ->
           unsigned 10 0b1000110000 <.> unsigned 16 0
         PRIM PrimNotEq ->
           unsigned 10 0b1000110010 <.> unsigned 16 0
         PRIM PrimLess ->
           unsigned 10 0b1000110100 <.> unsigned 16 0
-        PRIM PrimLessEq ->
+        PRIM PrimGreaterEq ->
           unsigned 10 0b1000110110 <.> unsigned 16 0
         HALT err ->
           unsigned 10 0b1000001111 <.> unsigned 16 (errorCode err)
@@ -179,21 +199,9 @@ encode instrs =
                         unsigned 3 0b110 <.> unsigned 6 n
         other -> error ("Unknown instruction " ++ show other)
 
--- Encode error string
-errorCode :: String -> Int
-errorCode "ENone"           = 0
-errorCode "EStackOverflow"  = 1
-errorCode "EHeapOverflow"   = 2
-errorCode "EArith"          = 3
-errorCode "ELoadAddr"       = 4
-errorCode "EJumpAddr"       = 5
-errorCode "EStackIndex"     = 6
-errorCode "EUnknown"        = 7
-errorCode "EInstrIndex"     = 8
-errorCode "EUnknownInstr"   = 9
-errorCode "EStackUnderflow" = 10
-errorCode "EBindFail"       = 16
-errorCode "ECaseFail"       = 17
-errorCode "EEqnFail"        = 18
-errorCode "EApplyFail"      = 19
-errorCode other             = errorCode "EUnknown"
+-- Encode stack IR as hex
+encodeHex :: [Instr] -> [String]
+encodeHex instrs =
+    map (\i -> "0x" ++ showHex i "") (bytecodeInstrs code)
+  where
+    code = encode instrs

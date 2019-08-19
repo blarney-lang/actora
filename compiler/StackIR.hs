@@ -42,7 +42,7 @@ data Prim =
   | PrimEq
   | PrimNotEq
   | PrimLess
-  | PrimLessEq
+  | PrimGreaterEq
   deriving Show
 
 -- Instruction set

@@ -274,20 +274,20 @@ compile modName decls =
       is <- expList env es
       return (is ++ [STORE (length es) PtrTuple])
     -- Application of primitive function
-    exp env (Apply (Fun "+" n) [e0, Int i]) =
-      prim env (PrimAddImm (fromInteger i)) [e0]
-    exp env (Apply (Fun "+" n) [Int i, e0]) =
-      prim env (PrimAddImm (fromInteger i)) [e0]
-    exp env (Apply (Fun "-" n) [e0, Int i]) =
-      prim env (PrimSubImm (fromInteger i)) [e0]
+    --exp env (Apply (Fun "+" n) [e0, Int i]) =
+    --  prim env (PrimAddImm (fromInteger i)) [e0]
+    --exp env (Apply (Fun "+" n) [Int i, e0]) =
+    --  prim env (PrimAddImm (fromInteger i)) [e0]
+    --exp env (Apply (Fun "-" n) [e0, Int i]) =
+    --  prim env (PrimSubImm (fromInteger i)) [e0]
     exp env (Apply (Fun "+" n) [e0, e1]) = prim env PrimAdd [e0, e1]
     exp env (Apply (Fun "-" n) [e0, e1]) = prim env PrimSub [e0, e1]
     exp env (Apply (Fun "==" n) [e0, e1]) = prim env PrimEq [e0, e1]
     exp env (Apply (Fun "/=" n) [e0, e1]) = prim env PrimNotEq [e0, e1]
     exp env (Apply (Fun "<" n) [e0, e1]) = prim env PrimLess [e0, e1]
-    exp env (Apply (Fun "<=" n) [e0, e1]) = prim env PrimLessEq [e0, e1]
+    exp env (Apply (Fun "<=" n) [e0, e1]) = prim env PrimGreaterEq [e1, e0]
     exp env (Apply (Fun ">" n) [e0, e1]) = prim env PrimLess [e1, e0]
-    exp env (Apply (Fun ">=" n) [e0, e1]) = prim env PrimLessEq [e1, e0]
+    exp env (Apply (Fun ">=" n) [e0, e1]) = prim env PrimGreaterEq [e0, e1]
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n == length es = do
@@ -423,7 +423,7 @@ compile modName decls =
     seq :: Env -> [Exp] -> Maybe String -> Fresh [Instr]
     -- Return from function
     seq env [] Nothing =
-      return [RETURN (stackSize env)]
+      return [RETURN (stackSize env - 1)]
     -- Return from case alternative
     seq env [] (Just label) =
       return [SLIDE_JUMP (scopeSize env - 1) 1 (InstrLabel label)]
@@ -441,7 +441,7 @@ compile modName decls =
           then error ("Call of primitive " ++ f ++ " with incorrect arity")
           else do
             is <- exp env (Apply (Fun f n) es)
-            return (is ++ [RETURN (1 + stackSize env)])
+            return (is ++ [RETURN (stackSize env)])
     -- Tail call of known function, with correct number of args
     seq env [Apply (Fun f n) es] Nothing
       | n == length es = do
@@ -453,7 +453,7 @@ compile modName decls =
     -- Tail call of closure
     seq env [Apply (Closure f n) es] Nothing = do
       is <- exp env (Apply (Closure f n) es)
-      return (is ++ [RETURN (1 + stackSize env)])
+      return (is ++ [RETURN (stackSize env)])
     -- Tail call of unknown function
     seq env [Apply e es] Nothing = do
       is <- expList env (e:es)

@@ -80,7 +80,7 @@ step (pc, i, h, s, r, fs) =
     -- Return
     RETURN pop ->
       let a:rest = r in
-        (a, i, h, head s : L.drop pop s, rest, fs)
+        (a, i, h, head s : L.drop (pop+1) s, rest, fs)
     -- Load construction from the heap onto the stack
     LOAD pop -> (pc+1, i, h, s', r, fs)
       where
@@ -124,7 +124,7 @@ step (pc, i, h, s, r, fs) =
             PrimNotEq -> (2, if (s!!0) `equal` (s!!1)
                              then ATOM "false" else ATOM "true")
             PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
-            PrimLessEq -> (2, if x <= y then ATOM "true" else ATOM "false")
+            PrimGreaterEq -> (2, if x >= y then ATOM "true" else ATOM "false")
     -- Halt
     HALT err -> (pc, i, h, s, r, fs { flagHalt = Just err })
 
