@@ -5,4 +5,4 @@ filter(P,[H|T]) -> filter(P,T).
 null([]) -> true.
 null(Other) -> false.
 
-start() -> filter(null, [[1,2], [], [3,4]]).
+start() -> length(filter(null, [[1,2], [], [3,4]])).

@@ -1,3 +1,3 @@
 -import(reverse).
 
-start() -> reverse([1] ++ [2]).
+start() -> length(reverse([1] ++ [2])).

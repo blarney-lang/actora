@@ -1,7 +1,7 @@
 map(F, []) -> [];
 map(F, [X|Xs]) -> [F(X)|map(F, Xs)].
 
-inv(true) -> false;
-inv(false) -> true.
+int(true) -> 1;
+int(false) -> 0.
 
-start() -> map(inv, [false, true, false]).
+start() -> sum(map(int, [false, true, false])).

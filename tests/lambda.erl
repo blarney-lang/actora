@@ -3,7 +3,7 @@ map(F, [X|Xs]) -> [F(X)|map(F, Xs)].
 
 start() ->
   F = fun
-        (true) -> false;
-        (false) -> true
+        (true) -> 1;
+        (false) -> 0
       end,
-  map(F, [false, true, false]).
+  sum(map(F, [false, true, false])).

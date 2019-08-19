@@ -205,8 +205,8 @@ makeCore debugIn = do
       when (instr.isHalt) do
         if debugOut.notFull
           then do
-            display "top = " (stk.top1.content)
-            display "stack size = " (stk.size)
+            display "Result = %0d" (stk.top1.content)
+            display "Stack Size = " (stk.size)
             enq debugOut (instr.operand.truncate)
           else stall <== true
 

@@ -6,6 +6,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+make -s -C ../compiler > /dev/null
 if [ ! -f "$ELITE" ]; then
   echo Cannot find compiler: $ELITE
 fi
@@ -78,3 +79,29 @@ for PROG in $(ls *.erl); do
 done
 rm -f *.got
 rm -rf red
+
+# Checking correctness of core
+echo ""
+echo "TESTING CORE"
+rm -f *.got
+rm -rf CoreSim
+make -s -C ../rtl > /dev/null
+cd ../rtl && ./Main && cd ../tests
+cp -r ../rtl/CoreSim-Verilog .
+make -s -C CoreSim-Verilog > /dev/null 2> /dev/null
+for PROG in $(ls *.erl); do
+  BASE=$(basename $PROG .erl)
+  echo -n "$BASE: "
+  $ELITE -h $PROG > CoreSim-Verilog/instrs.hex
+  cd CoreSim-Verilog
+  ./CoreSim | grep Result | cut -d ' ' -f 3 > ../$BASE.got
+  cd ..
+  if cmp $BASE.got out/$BASE.out; then
+    echo -e "${GREEN}OK${NC}"
+  else
+    echo -e "${RED}FAILED${NC}"
+    exit -1
+  fi
+done
+rm -r *.got
+rm -rf CoreSim-Verilog

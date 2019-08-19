@@ -6,4 +6,6 @@ rev(Xs,Acc) ->
 
 reverse(Xs) -> rev(Xs, []).
 
-start() -> reverse([1,2,3]).
+head([X|Xs]) -> X.
+
+start() -> head(reverse([1,2,3])).
