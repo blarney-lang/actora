@@ -398,7 +398,7 @@ uint32_t run(Bytecode* code, State* s)
       Cell top = s->stack[s->sp-1];
       s->sp -= dist;
       s->stack[s->sp++] = top;
-      s->cycles+=3;
+      s->cycles+=2;
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);

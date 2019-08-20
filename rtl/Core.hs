@@ -64,7 +64,6 @@ makeCore debugIn = do
   hp :: Reg (Bit LogHeapSize) <- makeReg 0
 
   -- Temporary state for Slide/Return instruction
-  retAddr :: Reg InstrPtr <- makeReg dontCare
   slideCount <- makeReg dontCare
   slideOffset :: Reg StackPtr <- makeReg dontCare
 
@@ -159,8 +158,13 @@ makeCore debugIn = do
         pop stk popAmount
         slideCount <== instr.getSlideLen
         slideOffset <== instr.getSlideDist.signExtend.inv
-        retAddr <== rstk.top1
-        stall <== true
+        if instr.isReturn
+          then do
+            pop rstk 1
+            nextPC <== rstk.top1
+            push1 stk (stk.top1)
+        else do
+          stall <== true
 
       -- Load instruction
       when (instr.isLoad) do
@@ -249,9 +253,6 @@ makeCore debugIn = do
               push1 stk (slide1.val)
             when (index @1 (slideCount.val)) do
               push2 stk (slide2.val)
-            when (instrReg.val.isReturn) do
-              pop rstk 1
-              nextPC <== retAddr.val
           else do
             copy stk (slideOffset.val)
             slideCount <== slideCount.val - 1
