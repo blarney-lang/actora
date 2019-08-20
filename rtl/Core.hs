@@ -44,8 +44,12 @@ makeCore debugIn = do
   stall :: Wire (Bit 1) <- makeWire false
   let stallReg = reg false (stall.val)
 
+  -- Unconditional jump destination
+  jump :: Wire InstrPtr <- makeWire dontCare
+
   -- Pointer to next instruction to fetch
-  nextPC :: Wire InstrPtr <- makeWire (pc2.val + (stall.val ? (0, 1)))
+  nextPC :: Wire InstrPtr <-
+    makeWire (jump.active ? (jump.val, pc2.val + (stall.val ? (0, 1))))
 
   -- Trigger decode stage
   decode :: Reg (Bit 1) <- makeReg false
@@ -114,6 +118,9 @@ makeCore debugIn = do
       when (stall.val.inv .&. flush.inv) do
         pc <== pc2.val
         execute <== true
+        -- Avoid pipeline bubble on unconditional, direct jumps
+        when (instr2.isControl .&. instr2.isIndirect.inv) do
+          jump <== instr2.operand.truncate
 
   let instr = instr2.buffer
 
@@ -138,22 +145,20 @@ makeCore debugIn = do
       when (instr.isControl) do
         when (instr.isJump.inv) do
           push1 rstk (pc.val + 1)
-        nextPC <== instr.isIndirect ?
-          (stk.top1.content.truncate, instr.operand.truncate)
         when (instr.isIndirect) do
+          nextPC <== stk.top1.content.truncate;
           pop stk 1
 
       -- Slide/Return instruction
       when (instr.isSlide) do
         slide1 <== stk.top1
         slide2 <== stk.top2
-        let dist = instr.getSlideDist
-        let len = instr.getSlideLen
-        -- TODO register this sum
-        let popAmount = zeroExtend (dist + len.zeroExtend)
+        -- Registered sum
+        let popAmount = (instr2.getSlideDist +
+                         instr2.getSlideLen.zeroExtend).zeroExtend.old
         pop stk popAmount
-        slideCount <== len
-        slideOffset <== dist.signExtend.inv
+        slideCount <== instr.getSlideLen
+        slideOffset <== instr.getSlideDist.signExtend.inv
         retAddr <== rstk.top1
         stall <== true
 
@@ -200,8 +205,9 @@ makeCore debugIn = do
         -- Add/sub result
         let add1 :: Bit 33 = op1.signExtend
         let add2 :: Bit 33 = op2.signExtend
-        -- TODO: simplify
-        let doAdd :: Bit 1 = instr.isArith .&. instr.isAddOrSub .&. instr.isAdd
+        -- Registered control bit
+        let doAdd = buffer (instr2.isArith .&.
+                      instr2.isAddOrSub .&. instr2.isAdd)
         let addSub = add1 + (doAdd ? (add2, add2.inv))
                    + (doAdd ? (0, 1))
         let setUpper = instr.operand # range @15 @0 op1

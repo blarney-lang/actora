@@ -352,6 +352,7 @@ uint32_t run(Bytecode* code, State* s)
       else
         s->pc++;
       s->cycles++;
+      if (branch) s->cycles++;
     }
     else if (op == I_PushInt) {
       if (s->sp >= STACK_SIZE) return EStackOverflow;
@@ -397,7 +398,7 @@ uint32_t run(Bytecode* code, State* s)
       Cell top = s->stack[s->sp-1];
       s->sp -= dist;
       s->stack[s->sp++] = top;
-      s->cycles+=2;
+      s->cycles+=3;
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);
@@ -413,7 +414,7 @@ uint32_t run(Bytecode* code, State* s)
       if (s->rp >= RET_STACK_SIZE) return EStackOverflow;
       s->retStack[s->rp++] = s->pc + 1;
       s->pc = addr;
-      s->cycles++;
+      s->cycles+=1;
     }
     else if (op == I_ICall) {
       if (s->sp == 0) return EStackUnderflow;
@@ -423,11 +424,11 @@ uint32_t run(Bytecode* code, State* s)
       s->retStack[s->rp++] = s->pc + 1;
       s->pc = top.val;
       s->sp--;
-      s->cycles++;
+      s->cycles+=2;
     }
     else if (op == I_Jump) {
       s->pc = getOperand(instr);
-      s->cycles++;
+      s->cycles+=1;
     }
     else if (op == I_IJump) {
       if (s->sp == 0) return EStackUnderflow;
@@ -435,7 +436,7 @@ uint32_t run(Bytecode* code, State* s)
       if (top.tag.kind != FUN) return EJumpAddr;
       s->pc = top.val;
       s->sp--;
-      s->cycles++;
+      s->cycles+=2;
     }
     else if (op == I_Load) {
       bool pop = getLoadPopFlag(instr);
