@@ -6,7 +6,6 @@
 // Size (number of elements) of heap, stack, and return stack
 #define HEAP_SIZE      64000
 #define STACK_SIZE     4000
-#define RET_STACK_SIZE 1000
 
 // Instruction decoding
 // ====================
@@ -17,8 +16,6 @@
 #define I_Slide     0b1000000100
 #define I_Return    0b1000000101
 #define I_Copy      0b1000000110
-#define I_Call      0b1000001000
-#define I_ICall     0b1000001001
 #define I_Jump      0b1000001010
 #define I_IJump     0b1000001011
 #define I_Load      0b1000001101
@@ -230,8 +227,6 @@ struct State {
   Cell heap[HEAP_SIZE];
   // Stack
   Cell stack[STACK_SIZE];
-  // Return stack
-  uint32_t retStack[RET_STACK_SIZE];
   // Count number of cycles
   uint64_t cycles;
 };
@@ -351,7 +346,7 @@ uint32_t run(Bytecode* code, State* s)
       }
       else
         s->pc++;
-      s->cycles++;
+      s->cycles+=2;
       if (branch) s->cycles++;
     }
     else if (op == I_PushInt) {
@@ -379,7 +374,7 @@ uint32_t run(Bytecode* code, State* s)
       s->pc++;
       s->cycles++;
     }
-    else if (op == I_Slide) {
+    else if (op == I_Slide || op == I_Return) {
       uint32_t len = getSlideLen(instr);
       uint32_t dist = getSlideDist(instr);
       if (len > s->sp) return EStackUnderflow;
@@ -389,16 +384,16 @@ uint32_t run(Bytecode* code, State* s)
       s->sp -= dist;
       s->pc++;
       s->cycles += len == 1 ? 2 : len;
-    }
-    else if (op == I_Return) {
-      uint32_t dist = 1+getSlideDist(instr);
-      if (s->rp == 0) return EStackUnderflow;
-      s->pc = s->retStack[s->rp-1];
-      s->rp--;
-      Cell top = s->stack[s->sp-1];
-      s->sp -= dist;
-      s->stack[s->sp++] = top;
-      s->cycles+=2;
+      if (op == I_Return) {
+        if (s->sp <= 1) return EStackUnderflow;
+        Cell result = s->stack[s->sp-1];
+        Cell retAddr = s->stack[s->sp-2];
+        if (retAddr.tag.kind != FUN) return EJumpAddr;
+        s->pc = retAddr.val;
+        s->sp--;
+        s->stack[s->sp - 1] = result;
+        s->cycles++;
+      }
     }
     else if (op == I_Copy) {
       uint32_t offset = getOperand(instr);
@@ -408,23 +403,6 @@ uint32_t run(Bytecode* code, State* s)
       s->sp++;
       s->pc++;
       s->cycles++;
-    }
-    else if (op == I_Call) {
-      uint32_t addr = getOperand(instr);
-      if (s->rp >= RET_STACK_SIZE) return EStackOverflow;
-      s->retStack[s->rp++] = s->pc + 1;
-      s->pc = addr;
-      s->cycles+=1;
-    }
-    else if (op == I_ICall) {
-      if (s->sp == 0) return EStackUnderflow;
-      Cell top = s->stack[s->sp-1];
-      if (top.tag.kind != FUN) return EJumpAddr;
-      if (s->rp >= RET_STACK_SIZE) return EStackOverflow;
-      s->retStack[s->rp++] = s->pc + 1;
-      s->pc = top.val;
-      s->sp--;
-      s->cycles+=2;
     }
     else if (op == I_Jump) {
       s->pc = getOperand(instr);
@@ -579,10 +557,12 @@ void stackTrace(Bytecode* code, State* s)
 {
   printf("Stack trace:\n");
   printf("  %s\n", owner(code, s->pc));
-  uint32_t rp = s->rp;
-  while (rp != 0) {
-    printf("  %s\n", owner(code, s->retStack[rp-1]));
-    rp--;
+  uint32_t sp = s->sp - 1;
+  while (sp != 0) {
+    Cell cell = s->stack[s->sp];
+    if (cell.tag.kind == FUN)
+      printf("  %s\n", owner(code, cell.val));
+    sp--;
   }
 }
 

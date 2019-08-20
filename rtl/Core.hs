@@ -25,9 +25,6 @@ makeCore debugIn = do
   -- Value stack
   stk :: Stack LogStackSize Cell <- makeStack
 
-  -- Return stack
-  rstk :: Stack LogRetStackSize InstrPtr <- makeStack
-
   -- Heap storing pairs of cells
   heap :: RAM HeapPtr (Cell, Cell) <- makeRAM
 
@@ -140,12 +137,10 @@ makeCore debugIn = do
       when (instr.isCopy) do
         copy stk (instr.operand.truncate)
 
-      -- Jump/IJump/Call/ICall instruction
+      -- IJump instruction
       when (instr.isControl) do
-        when (instr.isJump.inv) do
-          push1 rstk (pc.val + 1)
         when (instr.isIndirect) do
-          nextPC <== stk.top1.content.truncate;
+          nextPC <== stk.top1.content.truncate
           pop stk 1
 
       -- Slide/Return instruction
@@ -158,13 +153,7 @@ makeCore debugIn = do
         pop stk popAmount
         slideCount <== instr.getSlideLen
         slideOffset <== instr.getSlideDist.signExtend.inv
-        if instr.isReturn
-          then do
-            pop rstk 1
-            nextPC <== rstk.top1
-            push1 stk (stk.top1)
-        else do
-          stall <== true
+        stall <== true
 
       -- Load instruction
       when (instr.isLoad) do
@@ -245,7 +234,7 @@ makeCore debugIn = do
   -- Non-first cycle of instruction execution
   always do
     when stallReg do
-      -- Slide/Return instruction
+      -- Slide instruction
       when (instrReg.val.isSlide) do
         if slideCount.val .<=. 2
           then do
@@ -257,6 +246,10 @@ makeCore debugIn = do
             copy stk (slideOffset.val)
             slideCount <== slideCount.val - 1
             stall <== true
+        -- Return instruction
+        when (instrReg.val.isReturn) do
+          nextPC <== stk.top1.content.truncate
+          pop stk 1
 
       -- Load instruction
       when (instrReg.val.isLoad) do

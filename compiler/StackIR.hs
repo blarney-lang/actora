@@ -50,14 +50,12 @@ data Instr =
     LABEL String
   | PUSH Atom
   | SETU Int
-  | CALL InstrPtr
-  | ICALL
   | COPY StackOffset
   | JUMP InstrPtr
   | IJUMP
   | SLIDE PopAmount NumAtoms
-  | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | RETURN PopAmount
+  | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | LOAD Bool
   | STORE NumAtoms PtrKind
   | BRANCH BranchCond PopAmount InstrPtr
@@ -102,7 +100,6 @@ link instrs = (L.map replace (dropLabels instrs), toAddr)
 
     -- Replace labels with addresses
     replace (PUSH (FUN (InstrLabel s))) = PUSH (FUN (resolve s))
-    replace (CALL (InstrLabel s)) = CALL (resolve s)
     replace (SLIDE_JUMP n m (InstrLabel s)) = SLIDE_JUMP n m (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
     replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)

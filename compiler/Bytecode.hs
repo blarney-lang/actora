@@ -128,18 +128,16 @@ encode instrs =
           unsigned 10 0b1000000100 <.>
           unsigned 10 dist <.>
           unsigned 6 n
+        RETURN dist ->
+          unsigned 10 0b1000000101 <.>
+          unsigned 10 dist <.>
+          unsigned 6 1
         COPY n ->
           unsigned 10 0b1000000110 <.> unsigned 16 n
-        CALL (InstrAddr addr) -> 
-          unsigned 10 0b1000001000 <.> unsigned 16 addr
-        ICALL ->
-          unsigned 10 0b1000001001 <.> unsigned 16 0
         JUMP (InstrAddr addr) ->
           unsigned 10 0b1000001010 <.> unsigned 16 addr
         IJUMP ->
           unsigned 10 0b1000001011 <.> unsigned 16 0
-        RETURN pop ->
-          unsigned 10 0b1000000101 <.> unsigned 10 pop <.> unsigned 6 1
         LOAD pop ->
           unsigned 10 0b1000001101 <.>
           unsigned 1 (if pop then 1 else 0) <.>

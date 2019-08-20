@@ -291,8 +291,12 @@ compile modName decls =
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n == length es = do
-          is <- expList env es
-          return (is ++ [CALL (InstrLabel f)])
+          is <- expList (push env [anon]) es
+          ret <- fresh
+          return $ [ PUSH (FUN (InstrLabel ret)) ]
+                ++ is
+                ++ [ JUMP (InstrLabel f)
+                   , LABEL ret ]
       | otherwise = error ("Function " ++ f ++ " applied to " ++
           " wrong number of arguments")
     -- Closure creation
@@ -302,12 +306,17 @@ compile modName decls =
       return (is ++ [STORE (1 + length es) (PtrApp arity)])
     -- Application of unknown function
     exp env (Apply f es) = do
-      is <- expList env (f:es)
+      is <- expList (push env [anon]) (f:es)
+      applyFail <- fresh
       ret <- fresh
-      return (is ++
-        [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
-        , LOAD True, ICALL
-        ])
+      return $ [ PUSH (FUN (InstrLabel ret)) ]
+            ++ is
+            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel applyFail)
+               , LOAD True, IJUMP
+               , LABEL applyFail
+               , JUMP (InstrLabel "$apply_fail")
+               , LABEL ret
+               ]
     -- Conditional expression
     exp env (Cond c e0 e1) = do
       elseLabel <- fresh
@@ -457,10 +466,12 @@ compile modName decls =
     -- Tail call of unknown function
     seq env [Apply e es] Nothing = do
       is <- expList env (e:es)
+      applyFail <- fresh
       return $ is 
-            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel "$apply_fail")
+            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel applyFail)
                , SLIDE (stackSize env) (length (e:es))
-               , LOAD True, IJUMP
+               , LOAD True, IJUMP, LABEL applyFail
+               , JUMP (InstrLabel "$apply_fail")
                ]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do
@@ -553,7 +564,10 @@ compile modName decls =
     prog :: Fresh [Instr]
     prog = do 
       is <- concat <$> mapM fun (M.toList eqnMap)
-      return $ [CALL (InstrLabel (modName ++ ":start"))]
+      ret <- fresh
+      return $ [ PUSH (FUN (InstrLabel ret))
+               , JUMP (InstrLabel (modName ++ ":start"))
+               , LABEL ret ]
             ++ [HALT "ENone"]
             ++ is
             ++ [LABEL "$bind_fail", HALT "EBindFail"]

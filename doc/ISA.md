@@ -11,10 +11,6 @@ Slide       | 1000000100           | dist<10>    | n<6>   |
 Return      | 1000000101           | dist<10>    | 000001 |
             +----------------------+----------------------+
 Copy        | 1000000110           | n<16>                |
-            +----------------------+-----------7----------+
-Call        | 1000001000           | addr<16>             |
-            +----------------------+----------------------+
-ICall       | 1000001001           |                      |
             +----------------------+----------------------+
 Jump        | 1000001010           | addr<16>             |
             +----------------------+----------------------+
@@ -90,8 +86,10 @@ Slide the top `n` stack elements down the stack by `dist` positions.
 
 ## Return
 
-Pop address from return stack and jump to it.  Also slide top stack
-element any number of places down the stack.
+Slide the top stack element down the stack by `dist` positions.  The
+top two stack elements now contain the result and the return address.
+Now, pop these two elements, push the result, and jump to the return
+address.
 
 ```
 25          15     
@@ -99,9 +97,6 @@ element any number of places down the stack.
 | 1000000101 | dist<10> | 000001 |
 +------------+----------+--------+
 ```
-
-Not the similarity to the Slide instruction, both in encoding and
-semantics.
 
 ## Copy
 

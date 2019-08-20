@@ -73,13 +73,13 @@ getPushVal i =
   where
     sign = index @0 i ? (index @15 i, 0)
 
--- Is it a Slide or Return instruction?
+-- Is it a Slide instruction?
 isSlide :: Instr -> Bit 1
 isSlide i = index @25 i .&. (range @5 @1 (i.opcode) .==. 0b00010)
 
--- Assuming isSlide, is it a Return?
+-- Assuming isSlide, is it a Return instruction?
 isReturn :: Instr -> Bit 1
-isReturn = index @16
+isReturn i = index @0 (i.opcode)
 
 -- Determine distance of Slide
 getSlideDist :: Instr -> Bit 10
@@ -93,15 +93,11 @@ getSlideLen = range @5 @0
 isCopy :: Instr -> Bit 1
 isCopy i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b000110)
 
--- Is it a Jump, IJump, Call, or ICall instruction?
+-- Is it a Jump, IJump instruction?
 isControl :: Instr -> Bit 1
 isControl i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0010)
 
--- Assuming isControl, is it an Jump or IJump?
-isJump :: Instr -> Bit 1
-isJump = index @17
-
--- Assuming isControl, is it an IJump or ICall?
+-- Assuming isControl, is it a direct or indirect jump?
 isIndirect :: Instr -> Bit 1
 isIndirect = index @16
 
