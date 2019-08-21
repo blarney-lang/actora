@@ -26,8 +26,10 @@ type Stack = [Atom]
 -- Flag register
 data Flags =
   Flags {
+    -- Condition flag
+    flagCond :: Bool
     -- Application has terminated
-    flagHalt :: Maybe ErrorCode
+  , flagHalt :: Maybe ErrorCode
   }
   deriving Show
 
@@ -82,11 +84,13 @@ step (pc, i, h, s, fs) =
       where
         p = S.length h
     -- Conditional branch
-    BRANCH (polarity, op) pop (InstrAddr a) -> (pc', i, h, s', fs)
+    CJUMPPOP pop (InstrAddr a)
+      | flagCond fs -> (a, i, h, L.drop pop s, fs)
+      | otherwise -> (pc+1, i, h, s, fs)
+    -- Match
+    MATCH (polarity, op) -> (pc+1, i, h, s, fs { flagCond = cond' })
       where
         top = s!!0
-        pc' = if cond' then a else pc+1
-        s' = if cond' then L.drop pop s else s
         cond' = if polarity == Neg then not cond else cond
         cond =
           case op of
@@ -131,7 +135,8 @@ run instrs = exec initial
     -- Initial state of flags register
     flags = 
       Flags {
-        flagHalt = Nothing
+        flagCond = False
+      , flagHalt = Nothing
       }
 
     -- Initial state of abstract machine

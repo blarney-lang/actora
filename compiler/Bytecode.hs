@@ -112,7 +112,7 @@ encode instrs =
         otherwise ->
           error ("Failed to encode instruction " ++ show instr)
 
-    -- Encode a single instruction, but look out for errors
+    -- Encode a single instruction, and propagate any errors
     encOne :: InstrAddr -> Instr -> Maybe BV
     encOne myAddr instr =
       case instr of
@@ -175,26 +175,24 @@ encode instrs =
           unsigned 10 0b1000110110 <.> unsigned 16 0
         HALT err ->
           unsigned 10 0b1000001111 <.> unsigned 16 (errorCode err)
-        BRANCH cond pop (InstrAddr addr) ->
-          unsigned 1 0 <.>
+        MATCH cond ->
+          unsigned 4 0b0001 <.>
           unsigned 1 neg <.>
-          cond' <.>
-          unsigned 5 pop <.>
-          unsigned 10 (addr - myAddr)
+          unsigned 5 c <.>
+          val
           where
             neg = case fst cond of { Pos -> 0; Neg -> 1}
-            cond' = case snd cond of
-                      IsAtom str -> 
-                        unsigned 3 0b010 <.>
-                        unsigned 6 (atomMap M.! str)
-                      IsInt val ->
-                        unsigned 3 0b001 <.> signed 6 val
-                      IsCons ->
-                        unsigned 3 0b100 <.> unsigned 6 2
-                      IsTuple len ->
-                        unsigned 3 0b101 <.> unsigned 6 len
-                      IsApp n ->
-                        unsigned 3 0b110 <.> unsigned 6 n
+            (c, val) =
+              case snd cond of
+                IsAtom str  -> (0b00010, unsigned 16 (atomMap M.! str))
+                IsInt x     -> (0b00001, signed 16 x)
+                IsCons      -> (0b00100, unsigned 16 2)
+                IsTuple len -> (0b00101, unsigned 16 len)
+                IsApp n     -> (0b00110, unsigned 16 n)
+        CJUMPPOP pop (InstrAddr addr) ->
+          unsigned 4 0b0000 <.>
+          unsigned 6 pop <.>
+          unsigned 16 addr
         other -> error ("Unknown instruction " ++ show other)
 
 -- Encode stack IR as hex

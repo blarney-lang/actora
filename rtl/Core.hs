@@ -60,6 +60,9 @@ makeCore debugIn = do
   -- Pointer to end of heap
   hp :: Reg (Bit LogHeapSize) <- makeReg 0
 
+  -- Condition flag
+  condFlag :: Reg (Bit 1) <- makeReg false
+
   -- Temporary state for Slide/Return instruction
   slideCount <- makeReg dontCare
   slideOffset :: Reg StackPtr <- makeReg dontCare
@@ -143,6 +146,14 @@ makeCore debugIn = do
           nextPC <== stk.top1.content.truncate
           pop stk 1
 
+      -- CJumpPop instruction
+      when (instr.isCJumpPop) do
+        when (condFlag.val) do
+          nextPC <== instr.operand.truncate
+          let doPop :: Bit 1 = buffer (instr2.getCJumpPop .!=. 0)
+          when doPop do
+            pop stk (instr.getCJumpPop.zeroExtend)
+
       -- Slide/Return instruction
       when (instr.isSlide) do
         slide1 <== stk.top1
@@ -170,24 +181,27 @@ makeCore debugIn = do
         storeLen <== instr.getStoreLen
         stall <== true
 
-      -- BranchPop instruction
-      when (instr.isBranchPop) do
-        let i :: BranchPop = unpack instr
+      -- Match instruction
+      when (instr.isMatch) do
         let t = stk.top1.tag
-        let tagOk = t .==. i.branchTag
+        let tagOk = t .==. instr.getMatchCond
+        --let ext = index @0 t ? (index @15 (instr.operand), 0)
+        --let eq = stk.top1.content .==. signExtend (ext # (instr.operand))
         let valOk =
               select [
                 t .==. 0b000 --> true
-              , t .==. 0b001 --> stk.top1.content .==. i.branchArg.signExtend
-              , t .==. 0b010 --> stk.top1.content .==. i.branchArg.zeroExtend
+              , t .==. 0b001 --> stk.top1.content .==. instr.operand.signExtend
+              , t .==. 0b010 --> stk.top1.content .==. instr.operand.zeroExtend
+--              , t .==. 0b001 --> eq
+--              , t .==. 0b010 --> eq
               , t .==. 0b100 --> true
-              , t .==. 0b101 --> stk.top1.getObjectLen .==. i.branchArg
-              , t .==. 0b110 --> stk.top1.getClosureArity .==. i.branchArg
+              , t .==. 0b101 --> stk.top1.getObjectLen .==.
+                                   instr.operand.truncate
+              , t .==. 0b110 --> stk.top1.getClosureArity .==.
+                                   instr.operand.truncate
               ]
-        let cond = (tagOk .&. valOk) .^. i.branchNeg
-        takeBranch <== cond
-        doPop <== i.branchPop .!=. 0
-        stall <== true
+        let cond = (tagOk .&. valOk) .^. instr.isMatchNeg
+        condFlag <== cond
 
       -- Primitive instruction
       when (instr.isPrim) do
@@ -284,14 +298,6 @@ makeCore debugIn = do
           push1 stk ptr
         else do
           stall <== true
-
-      -- BranchPop instruction
-      when (instrReg.val.isBranchPop) do
-        when (takeBranch.val) do
-          let i :: BranchPop = unpack (instrReg.val)
-          when (doPop.val) do
-            pop stk (i.branchPop.zeroExtend)
-          nextPC <== pc.val + i.branchOffset.zeroExtend
 
   return (debugOut.toStream)
 

@@ -307,15 +307,12 @@ compile modName decls =
     -- Application of unknown function
     exp env (Apply f es) = do
       is <- expList (push env [anon]) (f:es)
-      applyFail <- fresh
       ret <- fresh
       return $ [ PUSH (FUN (InstrLabel ret)) ]
             ++ is
-            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel applyFail)
-               , LOAD True, IJUMP
-               , LABEL applyFail
-               , JUMP (InstrLabel "$apply_fail")
-               , LABEL ret
+            ++ [ MATCH (Neg, IsApp (length es))
+               , CJUMPPOP 0 (InstrLabel "$apply_fail")
+               , LOAD True, IJUMP, LABEL ret
                ]
     -- Conditional expression
     exp env (Cond c e0 e1) = do
@@ -378,13 +375,15 @@ compile modName decls =
     branchNot :: Env -> Exp -> Int -> InstrPtr -> Fresh [Instr]
     branchNot env (Apply (Fun "==" 2) [e, Int i]) pop label = do
       is <- exp env e
-      return (is ++ [BRANCH (Neg, IsInt (fromInteger i)) pop label])
+      return (is ++
+        [MATCH (Neg, IsInt (fromInteger i)), CJUMPPOP pop label])
     branchNot env (Apply (Fun "==" 2) [e, Atom a]) pop label = do
       is <- exp env e
-      return (is ++ [BRANCH (Neg, IsAtom a) pop label])
+      return (is ++
+        [MATCH (Neg, IsAtom a), CJUMPPOP pop label])
     branchNot env e pop label = do
       is <- exp env e
-      return (is ++ [BRANCH (Neg, IsAtom "true") pop label])
+      return (is ++ [MATCH (Neg, IsAtom "true"), CJUMPPOP pop label])
 
     -- Copy given variable to top of stack
     copy :: Env -> Id -> ([Instr], Env)
@@ -400,17 +399,18 @@ compile modName decls =
       return ([], replace env v w)
     match env v (Atom a) fail = do
       let (is0, env0) = copy env v
-      let is1 = [BRANCH (Neg, IsAtom a) (scopeSize env0) fail]
+      let is1 = [MATCH (Neg, IsAtom a), CJUMPPOP (scopeSize env0) fail]
       return (is0 ++ is1, env0)
     match env v (Int i) fail = do
       let (is0, env0) = copy env v
-      let is1 = [BRANCH (Neg, IsInt (fromInteger i)) (scopeSize env0) fail]
+      let is1 = [MATCH (Neg, IsInt (fromInteger i)),
+                   CJUMPPOP (scopeSize env0) fail]
       return (is0 ++ is1, env0)
     match env v (Fun f n) fail =
       error ("Pattern contains function identifier " ++ f)
     match env v (Cons p0 p1) fail = do
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH (Neg, IsCons) (scopeSize env0) fail
+      let is1 = [ MATCH (Neg, IsCons), CJUMPPOP (scopeSize env0) fail
                 , LOAD False ]
       v0 <- fresh
       v1 <- fresh
@@ -420,7 +420,7 @@ compile modName decls =
     match env v (Tuple ps) fail = do
       let n = length ps
       let (is0, env0) = copy env v
-      let is1 = [ BRANCH (Neg, IsTuple n) (scopeSize env0) fail
+      let is1 = [ MATCH (Neg, IsTuple n), CJUMPPOP (scopeSize env0) fail
                 , LOAD False ]
       ws <- replicateM n fresh
       foldM (\(is, env) (p, w) -> do
@@ -466,12 +466,11 @@ compile modName decls =
     -- Tail call of unknown function
     seq env [Apply e es] Nothing = do
       is <- expList env (e:es)
-      applyFail <- fresh
       return $ is 
-            ++ [ BRANCH (Neg, IsApp (length es)) 0 (InstrLabel applyFail)
+            ++ [ MATCH (Neg, IsApp (length es))
+               , CJUMPPOP 0 (InstrLabel "$apply_fail")
                , SLIDE (stackSize env) (length (e:es))
-               , LOAD True, IJUMP, LABEL applyFail
-               , JUMP (InstrLabel "$apply_fail")
+               , LOAD True, IJUMP
                ]
     -- Conditional expression (tail context)
     seq env [Cond c e0 e1] k = do

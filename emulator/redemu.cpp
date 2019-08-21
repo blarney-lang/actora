@@ -70,21 +70,25 @@ inline uint32_t getStoreArity(uint32_t instr)
 inline uint32_t getStoreLen(uint32_t instr)
   { return (instr >> 2) & 0x3f; }
 
-// Is it a BranchPop instruction
-inline bool isBranchPop(uint32_t instr)
-  { return (instr >> 25) == 0; }
+// Is it a CJumpPop instruction?
+inline bool isCJumpPop(uint32_t instr)
+  { return (instr >> 22) == 0b0000; }
 
-// Decode BranchPop instruction
-inline void decodeBranchPop(uint32_t instr,
-  uint32_t* neg, uint32_t* condKind, uint32_t* condArg,
-    uint32_t* pop, uint32_t* offset)
-{
-  *offset = instr & 0x3ff; instr >>= 10;
-  *pop = instr & 0x1f; instr >>= 5;
-  *condArg = instr & 0x3f; instr >>= 6;
-  *condKind = instr & 0x7; instr >>= 3;
-  *neg = instr & 0x1;
-}
+// Get pop amount from CJumpPop instruction
+inline uint32_t getCJumpPop(uint32_t instr)
+  { return (instr >> 16) & 0x3f; }
+
+// Is it a Match instruction?
+inline bool isMatch(uint32_t instr)
+  { return (instr >> 22) == 0b0001; }
+
+// Is it a Match instruction?
+inline bool isMatchNeg(uint32_t instr)
+  { return (instr >> 21) & 1; }
+
+// Get condition from Match instruction
+inline uint32_t getMatchCond(uint32_t instr)
+  { return (instr >> 16) & 0x1f; }
 
 // Error codes
 // ===========
@@ -221,8 +225,8 @@ struct State {
   uint32_t hp;
   // Stack pointer
   uint32_t sp;
-  // Return stack pointer
-  uint32_t rp;
+  // Condition flag
+  bool condFlag;
   // Heap
   Cell heap[HEAP_SIZE];
   // Stack
@@ -307,47 +311,53 @@ uint32_t run(Bytecode* code, State* s)
     uint32_t instr = code->instrs[s->pc];
     uint32_t op = getOpcode(instr);
 
-    if (isBranchPop(instr)) {
+    if (isMatch(instr)) {
       if (s->sp == 0) return EStackUnderflow;
       Cell top = s->stack[s->sp-1];
-      uint32_t neg, condKind, condArg, pop, offset;
-      decodeBranchPop(instr, &neg, &condKind, &condArg, &pop, &offset);
-      bool branch = false;
+      uint32_t condKind = getMatchCond(instr);
+      uint32_t condArg = getOperand(instr);
+      bool cond = false;
       if (condKind == FUN) {
-        branch = top.tag.kind == FUN;
+        cond = top.tag.kind == FUN;
       }
       if (condKind == ATOM) {
         // Atom
-        branch = top.tag.kind == ATOM && top.val == condArg;
+        cond = top.tag.kind == ATOM && top.val == condArg;
       }
       else if (condKind == INT) {
         // Integer
         uint32_t condVal = condArg;
-        if (condVal & 0x20) condVal |= 0xfffffc00;
-        branch = top.tag.kind == INT && top.val == condVal;
+        if (condVal & 0x8000) condVal |= 0xffff0000;
+        cond = top.tag.kind == INT && top.val == condVal;
       }
       else if (condKind == PTR_CONS) {
         // Cons pointer
-        branch = top.tag.kind == PTR_CONS;
+        cond = top.tag.kind == PTR_CONS;
       }
       else if (condKind == PTR_TUPLE) {
         // Tuple pointer
-        branch = top.tag.kind == PTR_TUPLE && top.tag.len == condArg;
+        cond = top.tag.kind == PTR_TUPLE && top.tag.len == condArg;
       }
       else if (condKind == PTR_CLOSURE) {
         // Closure pointer
-        branch = top.tag.kind == PTR_CLOSURE && top.tag.arity == condArg;
+        cond = top.tag.kind == PTR_CLOSURE && top.tag.arity == condArg;
       }
-      if (neg) branch = !branch;
-      if (branch) {
+      if (isMatchNeg(instr)) cond = !cond;
+      s->condFlag = cond;
+      s->pc++;
+      s->cycles++;
+    }
+    else if (isCJumpPop(instr)) {
+      uint32_t pop = getCJumpPop(instr);
+      if (s->condFlag) {
         if (pop > s->sp) return EStackUnderflow;
         s->sp -= pop;
-        s->pc += offset;
+        s->pc = getOperand(instr);
       }
       else
         s->pc++;
-      s->cycles+=2;
-      if (branch) s->cycles++;
+      s->cycles++;
+      if (s->condFlag) s->cycles++;
     }
     else if (op == I_PushInt) {
       if (s->sp >= STACK_SIZE) return EStackOverflow;
@@ -589,7 +599,7 @@ int main(int argc, char** argv)
   state->pc = 0;
   state->hp = 0;
   state->sp = 0;
-  state->rp = 0;
+  state->condFlag = false;
   state->cycles = 0;
 
   uint32_t err = run(&code, state);

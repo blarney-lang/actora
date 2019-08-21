@@ -58,7 +58,8 @@ data Instr =
   | SLIDE_JUMP PopAmount NumAtoms InstrPtr
   | LOAD Bool
   | STORE NumAtoms PtrKind
-  | BRANCH BranchCond PopAmount InstrPtr
+  | MATCH BranchCond
+  | CJUMPPOP PopAmount InstrPtr
   | PRIM Prim
   | HALT ErrorCode
   deriving Show
@@ -102,7 +103,7 @@ link instrs = (L.map replace (dropLabels instrs), toAddr)
     replace (PUSH (FUN (InstrLabel s))) = PUSH (FUN (resolve s))
     replace (SLIDE_JUMP n m (InstrLabel s)) = SLIDE_JUMP n m (resolve s)
     replace (JUMP (InstrLabel s)) = JUMP (resolve s)
-    replace (BRANCH c n (InstrLabel s)) = BRANCH c n (resolve s)
+    replace (CJUMPPOP pop (InstrLabel s)) = CJUMPPOP pop (resolve s)
     replace other = other
 
 -- Determine all atoms used
@@ -112,5 +113,5 @@ atoms is =
   where
     reserved = ["false", "true", "[]"]
     get (PUSH (ATOM a)) = S.singleton a
-    get (BRANCH (_, IsAtom a) _ _) = S.singleton a
+    get (MATCH (_, IsAtom a)) = S.singleton a
     get other = S.empty

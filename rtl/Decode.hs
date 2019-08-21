@@ -178,18 +178,22 @@ isLess i = range @3 @2 (i.opcode) .==. 0b01
 isNegCmp :: Instr -> Bit 1
 isNegCmp i = index @1 (i.opcode)
 
--- Is it a BranchPop instruction?
-isBranchPop :: Instr -> Bit 1
-isBranchPop i = inv (index @25 i)
+-- Is it a CJumpPop instruction?
+isCJumpPop :: Instr -> Bit 1
+isCJumpPop i = inv (index @25 i) .&. inv (index @22 i)
 
--- Format of BranchPop instruction
-data BranchPop =
-  BranchPop {
-    branchOp     :: Bit 1
-  , branchNeg    :: Bit 1
-  , branchTag    :: Tag
-  , branchArg    :: Bit 6
-  , branchPop    :: Bit 5
-  , branchOffset :: Bit 10
-  }
-  deriving (Generic, Bits, FShow)
+-- Get pop amount from CJumpPop instruction
+getCJumpPop :: Instr -> Bit 6
+getCJumpPop = range @21 @16
+
+-- Is it a Match instruction?
+isMatch :: Instr -> Bit 1
+isMatch i = inv (index @25 i) .&. index @22 i
+
+-- Is Match condition negated?
+isMatchNeg :: Instr -> Bit 1
+isMatchNeg = index @21
+
+-- Get condition from Match instruction
+getMatchCond :: Instr -> Bit 3
+getMatchCond = range @18 @16

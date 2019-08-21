@@ -35,9 +35,11 @@ NotEq       | 1000110010           |                      |
 Less        | 1000110100           |                      |
             +----------------------+----------------------+
 GreaterEq   | 1000110110           |                      |
-            +---24-------23---------14-------9------------+
-BranchPop   | 0 | neg<1> | cond<9>  | pop<5> | offset<10> |
-            +---+--------+----------+--------+------------+
+            +-----21---------------+----------------------+
+CJumpPop    | 0000 | pop<6>        | addr<16>             |
+            +------+-------20------+----------------------+
+Match       | 0001 | neg<1> | c<5> | data<16>             |
+            +------+--------+------+----------------------+
 ```
 
 ## PushIPtr
@@ -109,30 +111,6 @@ Push the nth element from the stop of the stack onto the stack.
 +------------+-------+
 ```
 
-## Call
-
-Push program counter onto return stack and jump to given address
-(zeroExtended).
-
-```
-25          15     
-+------------+----------+
-| 1000001000 | addr<16> |
-+------------+----------+
-```
-
-## ICall
-
-Push program counter onto return stack and jump to address on top of
-stack.
-
-```
-25          15     
-+------------+------------+
-| 1000001001 | unused<16> |
-+------------+------------+
-```
-
 ## Jump
 
 Jump to given address (zero extended).
@@ -153,38 +131,6 @@ Jump to address on top of the stack.
 +------------+------------+
 | 1000001011 | unused<16> |
 +------------+------------+
-```
-
-## BranchPop
-
-This relative conditional branch instruction also pops from the stack
-when the branch is taken.  
-
-```
-25  24       23        14       9            
-+---+--------+---------+--------+------------+
-| 0 | neg<1> | cond<9> | pop<5> | offset<10> |
-+---+--------+---------+--------+------------+
-```
-
-The 9-bit condition `cond` on the top stack element, which may be
-negated using the `neg` bit, has the following format.
-
-```
-8     5          
-+-----+----------+
-| 000 |          |  Is top a function pointer?
-+-----+----------+
-| 001 | data<6>  |  Is top an int with value == signExtend(data)?
-+-----+----------+
-| 010 | data<6>  |  Is top an atom with value == zeroExtend(data)?
-+-----+----------+
-| 100 | 000010   |  Is top a pointer to a cons constructor?
-+-----+----------+
-| 101 | len<6>   |  Is top a pointer to a tuple of given length?
-+-----+----------+
-| 110 | arity<6> |  Is top a pointer to a closure of given arity?
-+-----+----------+
 ```
 
 ## Load
@@ -307,6 +253,41 @@ Terminate with the given error code.
 +------------+------------+
 | 1000001111 | error<16>  |
 +------------+------------+
+```
+
+## Match
+
+Match the top stack element according to condition, and set the
+condition flag accordingly.
+
+```
+25     21       20       16
++------+--------+---------+----------+
+| 0001 | neg<1> | cond<5> | data<16> |
++------+--------+---------+----------+
+```
+
+The 5-bit condition `cond` on the top stack element, which may be
+negated using the `neg` bit, has the following format.
+
+
+  * `00000` - Is top a function pointer?
+  * `00001` - Is top an int with value == signExtend(data)?
+  * `00010` - Is top an atom with value == zeroExtend(data)?
+  * `00100` - Is top a pointer to a cons constructor?
+  * `00101` - Is top a pointer to a tuple of length data?
+  * `00110` - Is top a pointer to a closure of arity data?
+
+## CJumpPop
+
+Conditional jump and pop from stack based on condition flag.  If the
+jump is taken, a given number of items are popped from the stack.
+
+```
+25     21       16
++------+--------+----------+
+| 0000 | pop<6> | addr<16> |
++------+--------+----------+
 ```
 
 ## Error codes
