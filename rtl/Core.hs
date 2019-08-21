@@ -25,21 +25,31 @@ makeCore debugIn = do
   -- Value stack
   stk :: Stack LogStackSize Cell <- makeStack
 
-  -- Return stack
-  rstk :: Stack LogRetStackSize InstrPtr <- makeStack
-
   -- Heap storing pairs of cells
   heap :: RAM HeapPtr (Cell, Cell) <- makeRAM
 
   -- Debug output queue
   debugOut :: Queue (Bit 8) <- makeShiftQueue 1
 
-  -- Program counter
-  pc :: Reg InstrPtr <- makeReg ones
+  -- Program counter of instruction in stage 2
+  pc2 :: Reg InstrPtr <- makeReg ones
+
+  -- Program counter of instruciton in stage 3
+  pc :: Reg InstrPtr <- makeReg dontCare
+
+  -- Stall pipeline
+  stall :: Wire (Bit 1) <- makeWire false
+  let stallReg = reg false (stall.val)
+
+  -- Unconditional jump destination
+  jump :: Wire InstrPtr <- makeWire dontCare
 
   -- Pointer to next instruction to fetch
-  -- (Defaults to pc.val + 1)
-  nextPC :: Wire InstrPtr <- makeWire (pc.val + 1)
+  nextPC :: Wire InstrPtr <-
+    makeWire (jump.active ? (jump.val, pc2.val + (stall.val ? (0, 1))))
+
+  -- Trigger decode stage
+  decode :: Reg (Bit 1) <- makeReg false
 
   -- Trigger execute stage
   execute :: Reg (Bit 1) <- makeDReg false
@@ -50,12 +60,10 @@ makeCore debugIn = do
   -- Pointer to end of heap
   hp :: Reg (Bit LogHeapSize) <- makeReg 0
 
-  -- Stall pipeline
-  stall :: Wire (Bit 1) <- makeWire false
-  let stallReg = reg false (stall.val)
+  -- Condition flag
+  condFlag :: Reg (Bit 1) <- makeReg false
 
   -- Temporary state for Slide/Return instruction
-  retAddr :: Reg InstrPtr <- makeReg dontCare
   slideCount <- makeReg dontCare
   slideOffset :: Reg StackPtr <- makeReg dontCare
 
@@ -77,25 +85,45 @@ makeCore debugIn = do
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
   doPop :: Reg (Bit 1) <- makeReg dontCare
 
--- TODO: remove
-  cycleCount :: Reg (Bit 32) <- makeReg 0
-  always do cycleCount <== cycleCount.val + 1
-
   -- Stage 1: Fetch
   -- ==============
+
+  -- Flush condition
+  let flush = nextPC.active
 
   -- Fetch next instruction
   always do
     load instrMem (nextPC.val)
 
-    -- When not stalling, trigger execute stage and update PC
+    -- When not stalling, enable decode stage and update PC
     when (stall.val.inv) do
-      execute <== true
-      pc <== nextPC.val
+      decode <== true
+      pc2 <== nextPC.val
 
-  let instr = instrMem.out
+    -- When flushing, disable decode stage
+    -- Note: must not stall and flush at the same time
+    when flush do
+      decode <== false
 
-  -- Stage 2: Execute
+  let instr2 = instrMem.out
+
+  -- Stage 2: Decode
+  -- ===============
+
+  always do
+    -- When decode stage is enabled
+    when (decode.val) do
+      -- When not stalling and not flushing, trigger execute stage
+      when (stall.val.inv .&. flush.inv) do
+        pc <== pc2.val
+        execute <== true
+        -- Avoid pipeline bubble on unconditional, direct jumps
+        when (instr2.isControl .&. instr2.isIndirect.inv) do
+          jump <== instr2.operand.truncate
+
+  let instr = instr2.buffer
+
+  -- Stage 3: Execute
   -- ================
 
   -- First (any maybe only) cycle of instruction execution
@@ -112,27 +140,30 @@ makeCore debugIn = do
       when (instr.isCopy) do
         copy stk (instr.operand.truncate)
 
-      -- Jump/IJump/Call/ICall instruction
+      -- IJump instruction
       when (instr.isControl) do
-        when (instr.isJump.inv) do
-          push1 rstk (pc.val + 1)
-        nextPC <== instr.isIndirect ?
-          (stk.top1.content.truncate, instr.operand.truncate)
         when (instr.isIndirect) do
+          nextPC <== stk.top1.content.truncate
           pop stk 1
+
+      -- CJumpPop instruction
+      when (instr.isCJumpPop) do
+        when (condFlag.val) do
+          nextPC <== instr.operand.truncate
+          let doPop :: Bit 1 = buffer (instr2.getCJumpPop .!=. 0)
+          when doPop do
+            pop stk (instr.getCJumpPop.zeroExtend)
 
       -- Slide/Return instruction
       when (instr.isSlide) do
         slide1 <== stk.top1
         slide2 <== stk.top2
-        let dist = instr.getSlideDist
-        let len = instr.getSlideLen
-        -- TODO register this sum
-        let popAmount = zeroExtend (dist + len.zeroExtend)
+        -- Registered sum
+        let popAmount = (instr2.getSlideDist +
+                         instr2.getSlideLen.zeroExtend).zeroExtend.old
         pop stk popAmount
-        slideCount <== len
-        slideOffset <== dist.signExtend.inv
-        retAddr <== rstk.top1
+        slideCount <== instr.getSlideLen
+        slideOffset <== instr.getSlideDist.signExtend.inv
         stall <== true
 
       -- Load instruction
@@ -150,24 +181,27 @@ makeCore debugIn = do
         storeLen <== instr.getStoreLen
         stall <== true
 
-      -- BranchPop instruction
-      when (instr.isBranchPop) do
-        let i :: BranchPop = unpack instr
+      -- Match instruction
+      when (instr.isMatch) do
         let t = stk.top1.tag
-        let tagOk = t .==. i.branchTag
+        let tagOk = t .==. instr.getMatchCond
+        --let ext = index @0 t ? (index @15 (instr.operand), 0)
+        --let eq = stk.top1.content .==. signExtend (ext # (instr.operand))
         let valOk =
               select [
                 t .==. 0b000 --> true
-              , t .==. 0b001 --> stk.top1.content .==. i.branchArg.signExtend
-              , t .==. 0b010 --> stk.top1.content .==. i.branchArg.zeroExtend
+              , t .==. 0b001 --> stk.top1.content .==. instr.operand.signExtend
+              , t .==. 0b010 --> stk.top1.content .==. instr.operand.zeroExtend
+--              , t .==. 0b001 --> eq
+--              , t .==. 0b010 --> eq
               , t .==. 0b100 --> true
-              , t .==. 0b101 --> stk.top1.getObjectLen .==. i.branchArg
-              , t .==. 0b110 --> stk.top1.getClosureArity .==. i.branchArg
+              , t .==. 0b101 --> stk.top1.getObjectLen .==.
+                                   instr.operand.truncate
+              , t .==. 0b110 --> stk.top1.getClosureArity .==.
+                                   instr.operand.truncate
               ]
-        let cond = (tagOk .&. valOk) .^. i.branchNeg
-        takeBranch <== cond
-        doPop <== i.branchPop .!=. 0
-        stall <== true
+        let cond = (tagOk .&. valOk) .^. instr.isMatchNeg
+        condFlag <== cond
 
       -- Primitive instruction
       when (instr.isPrim) do
@@ -178,8 +212,9 @@ makeCore debugIn = do
         -- Add/sub result
         let add1 :: Bit 33 = op1.signExtend
         let add2 :: Bit 33 = op2.signExtend
-        -- TODO: simplify
-        let doAdd :: Bit 1 = instr.isArith .&. instr.isAddOrSub .&. instr.isAdd
+        -- Registered control bit
+        let doAdd = buffer (instr2.isArith .&.
+                      instr2.isAddOrSub .&. instr2.isAdd)
         let addSub = add1 + (doAdd ? (add2, add2.inv))
                    + (doAdd ? (0, 1))
         let setUpper = instr.operand # range @15 @0 op1
@@ -213,7 +248,7 @@ makeCore debugIn = do
   -- Non-first cycle of instruction execution
   always do
     when stallReg do
-      -- Slide/Return instruction
+      -- Slide instruction
       when (instrReg.val.isSlide) do
         if slideCount.val .<=. 2
           then do
@@ -221,13 +256,14 @@ makeCore debugIn = do
               push1 stk (slide1.val)
             when (index @1 (slideCount.val)) do
               push2 stk (slide2.val)
-            when (instrReg.val.isReturn) do
-              pop rstk 1
-              nextPC <== retAddr.val
           else do
             copy stk (slideOffset.val)
             slideCount <== slideCount.val - 1
             stall <== true
+        -- Return instruction
+        when (instrReg.val.isReturn) do
+          nextPC <== stk.top1.content.truncate
+          pop stk 1
 
       -- Load instruction
       when (instrReg.val.isLoad) do
@@ -262,14 +298,6 @@ makeCore debugIn = do
           push1 stk ptr
         else do
           stall <== true
-
-      -- BranchPop instruction
-      when (instrReg.val.isBranchPop) do
-        when (takeBranch.val) do
-          let i :: BranchPop = unpack (instrReg.val)
-          when (doPop.val) do
-            pop stk (i.branchPop.zeroExtend)
-          nextPC <== pc.val + i.branchOffset.zeroExtend
 
   return (debugOut.toStream)
 

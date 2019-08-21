@@ -9,3 +9,4 @@ clean:
 	make -C nios-ii/de5-net clean
 	make -C nios-ii/de10-pro clean
 	make -C rtl clean
+	make -C emulator clean

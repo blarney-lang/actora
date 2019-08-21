@@ -73,13 +73,13 @@ getPushVal i =
   where
     sign = index @0 i ? (index @15 i, 0)
 
--- Is it a Slide or Return instruction?
+-- Is it a Slide instruction?
 isSlide :: Instr -> Bit 1
 isSlide i = index @25 i .&. (range @5 @1 (i.opcode) .==. 0b00010)
 
--- Assuming isSlide, is it a Return?
+-- Assuming isSlide, is it a Return instruction?
 isReturn :: Instr -> Bit 1
-isReturn = index @16
+isReturn i = index @0 (i.opcode)
 
 -- Determine distance of Slide
 getSlideDist :: Instr -> Bit 10
@@ -93,15 +93,11 @@ getSlideLen = range @5 @0
 isCopy :: Instr -> Bit 1
 isCopy i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b000110)
 
--- Is it a Jump, IJump, Call, or ICall instruction?
+-- Is it a Jump, IJump instruction?
 isControl :: Instr -> Bit 1
 isControl i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0010)
 
--- Assuming isControl, is it an Jump or IJump?
-isJump :: Instr -> Bit 1
-isJump = index @17
-
--- Assuming isControl, is it an IJump or ICall?
+-- Assuming isControl, is it a direct or indirect jump?
 isIndirect :: Instr -> Bit 1
 isIndirect = index @16
 
@@ -182,18 +178,22 @@ isLess i = range @3 @2 (i.opcode) .==. 0b01
 isNegCmp :: Instr -> Bit 1
 isNegCmp i = index @1 (i.opcode)
 
--- Is it a BranchPop instruction?
-isBranchPop :: Instr -> Bit 1
-isBranchPop i = inv (index @25 i)
+-- Is it a CJumpPop instruction?
+isCJumpPop :: Instr -> Bit 1
+isCJumpPop i = inv (index @25 i) .&. inv (index @22 i)
 
--- Format of BranchPop instruction
-data BranchPop =
-  BranchPop {
-    branchOp     :: Bit 1
-  , branchNeg    :: Bit 1
-  , branchTag    :: Tag
-  , branchArg    :: Bit 6
-  , branchPop    :: Bit 5
-  , branchOffset :: Bit 10
-  }
-  deriving (Generic, Bits, FShow)
+-- Get pop amount from CJumpPop instruction
+getCJumpPop :: Instr -> Bit 6
+getCJumpPop = range @21 @16
+
+-- Is it a Match instruction?
+isMatch :: Instr -> Bit 1
+isMatch i = inv (index @25 i) .&. index @22 i
+
+-- Is Match condition negated?
+isMatchNeg :: Instr -> Bit 1
+isMatchNeg = index @21
+
+-- Get condition from Match instruction
+getMatchCond :: Instr -> Bit 3
+getMatchCond = range @18 @16
