@@ -185,15 +185,11 @@ makeCore debugIn = do
       when (instr.isMatch) do
         let t = stk.top1.tag
         let tagOk = t .==. instr.getMatchCond
-        --let ext = index @0 t ? (index @15 (instr.operand), 0)
-        --let eq = stk.top1.content .==. signExtend (ext # (instr.operand))
         let valOk =
               select [
                 t .==. 0b000 --> true
               , t .==. 0b001 --> stk.top1.content .==. instr.operand.signExtend
               , t .==. 0b010 --> stk.top1.content .==. instr.operand.zeroExtend
---              , t .==. 0b001 --> eq
---              , t .==. 0b010 --> eq
               , t .==. 0b100 --> true
               , t .==. 0b101 --> stk.top1.getObjectLen .==.
                                    instr.operand.truncate
