@@ -24,6 +24,7 @@ atomTag    = 0b010
 consTag    = 0b100
 tupleTag   = 0b101
 closureTag = 0b110
+gcTag      = 0b111
 
 -- Cons, tuple and closure cells all contain heap pointers
 isPtr :: Cell -> Bit 1

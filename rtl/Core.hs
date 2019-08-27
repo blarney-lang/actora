@@ -28,6 +28,9 @@ makeCore debugIn = do
   -- Heap storing pairs of cells
   heap :: RAM HeapPtr (Cell, Cell) <- makeRAM
 
+  -- Scratchpad for copying collector
+  scratchpad :: RAM ScratchpadPtr (Cell, Cell) <- makeRAM
+
   -- Debug output queue
   debugOut :: Queue (Bit 8) <- makeShiftQueue 1
 
@@ -74,16 +77,21 @@ makeCore debugIn = do
 
   -- Temporary state for Load instruction
   loadPtr :: Reg HeapPtr <- makeReg dontCare
-  loadCount :: Reg (Bit 6) <- makeReg dontCare
+  loadCount :: Reg StackPtr <- makeReg dontCare
   loadOdd :: Reg (Bit 1) <- makeReg dontCare
 
   -- Temporary state for Store instruction
-  storeLen :: Reg (Bit 6) <- makeReg dontCare
-  doStore :: Wire (Bit 1) <- makeWire false
+  storeLen :: Reg StackPtr <- makeReg dontCare
 
   -- Temporary state for BranchPop instruction
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
   doPop :: Reg (Bit 1) <- makeReg dontCare
+
+  -- Garbage collector state used in CPU pipeline
+  gcStart :: Reg (Bit 1) <- makeDReg false
+  gcSaveStack :: Reg (Bit 1) <- makeReg false
+  gcRestoreStack :: Reg (Bit 1) <- makeReg false
+  gcFrontPtr :: Reg ScratchpadPtr <- makeReg dontCare
 
   -- Stage 1: Fetch
   -- ==============
@@ -170,7 +178,7 @@ makeCore debugIn = do
       when (instr.isLoad) do
         load heap (stk.top1.getObjectPtr)
         loadPtr <== stk.top1.getObjectPtr - 1
-        loadCount <== stk.top1.getObjectLen
+        loadCount <== stk.top1.getObjectLen.zeroExtend
         loadOdd <== index @0 (stk.top1.getObjectLen)
         stall <== true
         when (instr.isLoadPop) do
@@ -178,7 +186,7 @@ makeCore debugIn = do
 
       -- Store instruction
       when (instr.isStore) do
-        storeLen <== instr.getStoreLen
+        storeLen <== instr.getStoreLen.zeroExtend
         stall <== true
 
       -- Match instruction
@@ -262,7 +270,7 @@ makeCore debugIn = do
           pop stk 1
 
       -- Load instruction
-      when (instrReg.val.isLoad) do
+      when (instrReg.val.isLoad .|. gcRestoreStack.val) do
         let (cell1, cell2) = heap.out
         -- Push first cell
         push1 stk cell1
@@ -278,22 +286,182 @@ makeCore debugIn = do
         loadPtr <== loadPtr.val - 1
         loadCount <== loadCount.val - 2
 
-      -- Store instruction
-      when (instrReg.val.isStore) do
+      -- Store instruction (this code also active when gcSaveStack is true)
+      when (instrReg.val.isStore .|. gcSaveStack.val) do
         storeLen <== storeLen.val - 2
         -- Write top two elements to heap
-        store heap (hp.val.truncate) (stk.top1, stk.top2)
-        hp <== hp.val + 1
+        let stkTop2 =
+              Cell {
+                tag = storeLen.val .==. 1 ? (intTag, stk.top2.tag),
+                content = stk.top2.content
+              }
+        if gcSaveStack.val
+          then do
+            store scratchpad (gcFrontPtr.val) (stk.top1, stkTop2)
+            gcFrontPtr <== gcFrontPtr.val + 1
+          else do
+            store heap (hp.val.truncate) (stk.top1, stkTop2)
+            hp <== hp.val + 1
+        -- Push the pointer on the last cycle
+        if storeLen.val .<=. 2
+          then do
+            if gcSaveStack.val
+              then gcSaveStack <== false
+              else do
+                let ptr = makeStorePtr (instrReg.val) (hp.val.truncate)
+                push1 stk ptr
+          else
+            when (gcSaveStack.val.inv) do
+              stall <== true
         -- Pop top element(s) from stack
         let popAmount = storeLen.val .==. 1 ? (1, 2)
         pop stk popAmount
-        -- Push the pointer on the last cycle
-        if storeLen.val .<=. 2
+
+  -- Garbage collector
+  -- =================
+
+  -- Size of the stack before/after GC
+  gcStackSize :: Reg StackPtr <- makeReg dontCare
+
+  -- GC copy mode (copier inactive if 0, otherwise active)
+  gcCopyMode :: Reg (Bit 3) <- makeReg 0
+
+  -- The cells currently being collected
+  gcCell :: Reg Cell <- makeReg dontCare
+  gcCell2 :: Reg Cell <- makeReg dontCare
+
+  -- Back pointers for to-space
+  gcBackPtr :: Reg ScratchpadPtr <- makeReg dontCare
+
+  -- GC helper: Copy object to scratchpad
+  ---------------------------------------
+
+  -- Cell pair being copied to scratchpad
+  gcPair :: Reg (Cell, Cell) <- makeReg dontCare
+
+  -- Parameters to the copier
+  gcCopyLen :: Reg (Bit 6) <- makeReg dontCare
+  gcCopyToAddr :: Reg ScratchpadPtr <- makeReg dontCare
+  gcCopyFromAddr :: Reg HeapPtr <- makeReg dontCare
+
+  always do
+    -- 1. If cell is a pointer then proceed. Otherwise, no need to copy.
+    when (gcCopyMode.val .==. 1) do
+      load heap (gcCell.val.content.truncate)
+      if (gcCell.val.isPtr)
+        then gcCopyMode <== 2
+        else gcCopyMode <== 0
+
+    -- 2. If object not already collected then collect it
+    when (gcCopyMode.val .==. 2) do
+      let (cell1, cell2) = heap.out
+      if cell1.tag .==. gcTag.fromInteger
         then do
-          let ptr = makeStorePtr (instrReg.val) (hp.val.truncate)
-          push1 stk ptr
+          -- Already collected
+          gcCell <== cell1 { tag = gcCell.val.tag }
+          gcCopyMode <== 0
         else do
-          stall <== true
+          -- Determine object length in number of cell pairs
+          let len = dropBitsLSB @1 (cell1.getObjectLen + 1)
+          -- Offset of new object
+          let offset = dropBitsLSB @1 (cell1.getObjectLen)
+          -- Determine new pointer
+          let ptr = gcFrontPtr.val + offset.zeroExtend
+          -- Update the gcCell to represent the new pointer
+          gcCell <== Cell { tag = gcCell.val.tag, content = ptr.zeroExtend}
+          gcFrontPtr <== gcFrontPtr.val + len.zeroExtend
+          -- Store GC indirection
+          let gcInd = Cell { tag = gcTag.fromInteger, content = ptr.zeroExtend }
+          store heap (gcCell.val.content.truncate) (gcInd, dontCare)
+          -- Copy object to scratchpad
+          gcPair <== heap.out
+          gcCopyLen <== offset.zeroExtend
+          gcCopyToAddr <== ptr
+          gcCopyFromAddr <== gcCell.val.content.truncate - 1
+          gcCopyMode <== 3
+  
+    -- 3. Copy object to scratchpad
+    when (gcCopyMode.val .==. 3) do
+      -- Store to scratchpad
+      store scratchpad (gcCopyToAddr.val) (gcPair.val)
+      -- Load next pair
+      load heap (gcCopyFromAddr.val)
+      -- Check if we're done
+      gcCopyToAddr <== gcCopyToAddr.val - 1
+      gcCopyFromAddr <== gcCopyFromAddr.val - 1
+      gcCopyLen <== gcCopyLen.val - 1
+      gcCopyMode <== gcCopyLen.val .==. 0 ? (0, 4)
+  
+    -- 4. Latch heap output
+    when (gcCopyMode.val .==. 4) do
+      gcPair <== heap.out
+      gcCopyMode <== 3
+  
+  -- Copying collector
+  --------------------
+
+  let collector =
+        Seq [
+          -- Step 1: write stack to heap
+          Action do
+            storeLen <== stk.size
+            gcStackSize <== stk.size
+            gcSaveStack <== true,
+          Wait (gcSaveStack.val .==. false),
+
+          -- Step 2: copying collector
+          While (gcBackPtr.val .!=. gcFrontPtr.val) (
+            Seq [
+              Action do load scratchpad (gcBackPtr.val),
+              Action do
+                gcCell <== scratchpad.out.fst
+                gcCell2 <== scratchpad.out.snd
+                gcCopyMode <== 1,
+              Wait (gcCopyMode.val .==. 0),
+              Action do
+                gcCell2 <== gcCell.val
+                gcCell <== gcCell2.val
+                gcCopyMode <== 1,
+              Wait (gcCopyMode.val .==. 0),
+              Action do
+                store scratchpad (gcBackPtr.val) (gcCell2.val, gcCell.val)
+                gcBackPtr <== gcBackPtr.val + 1
+            ]
+          ),
+
+          -- Step 3: copy scratchpad back to heap
+          Action do
+            hp <== gcBackPtr.val.zeroExtend
+            gcBackPtr <== 0,
+          While (gcBackPtr.val .!=. gcFrontPtr.val) (
+            Seq [
+              Background (
+                Do [
+                  load scratchpad (gcBackPtr.val),
+                  return (),
+                  store heap (gcBackPtr.val.old.old.zeroExtend)
+                             (scratchpad.out.old)
+                ]
+              ),
+              Action do gcBackPtr <== gcBackPtr.val + 1
+            ]
+          ),
+          Tick, Tick,
+
+          -- Step 4: Restore stack from heap
+          Action do
+            gcRestoreStack <== true
+            loadCount <== gcStackSize.val
+            loadOdd <== index @0 (gcStackSize.val)
+            loadPtr <== zeroExtend (dropBitsLSB @1 (gcStackSize.val + 1)),
+          Wait (gcRestoreStack.val .==. false),
+
+          -- Finished
+          Tick
+        ]
+
+  -- Compile GC recipe
+  gcFinish <- run (gcStart.val) collector
 
   return (debugOut.toStream)
 
