@@ -20,6 +20,11 @@ p["LogHeapSizeMinusOne"] = p["LogHeapSize"] - 1
 # GC scratchpad size (in cell pairs)
 p["LogScratchpadSizeMinusOne"] = p["LogHeapSizeMinusOne"] - 1
 
+# GC threshold (GC invoked when heap size passes this)
+p["GCThreshold"] = (
+    (2 ** p["LogHeapSizeMinusOne"]) - (2 ** (p["LogStackSize"]-1)) - 32
+  )
+
 # Emit parameters in desired format
 if len(sys.argv) > 1:
   mode = sys.argv[1]

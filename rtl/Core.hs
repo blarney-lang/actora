@@ -89,6 +89,8 @@ makeCore debugIn = do
 
   -- Garbage collector state used in CPU pipeline
   gcStart :: Reg (Bit 1) <- makeDReg false
+  gcActive :: Reg (Bit 1) <- makeReg false
+  gcSavedStoreLen :: Reg StackPtr <- makeReg dontCare
   gcSaveStack :: Reg (Bit 1) <- makeReg false
   gcRestoreStack :: Reg (Bit 1) <- makeReg false
   gcFrontPtr :: Reg ScratchpadPtr <- makeReg dontCare
@@ -186,8 +188,13 @@ makeCore debugIn = do
 
       -- Store instruction
       when (instr.isStore) do
-        storeLen <== instr.getStoreLen.zeroExtend
+        when (hp.val .>=. GCThreshold) do
+          display "Starting GC stack size = " (stk.size)
+          gcStart <== true
+          gcActive <== true
+          gcSavedStoreLen <== instr.getStoreLen.zeroExtend
         stall <== true
+        storeLen <== instr.getStoreLen.zeroExtend
 
       -- Match instruction
       when (instr.isMatch) do
@@ -279,15 +286,17 @@ makeCore debugIn = do
           push2 stk cell2
         loadOdd <== false
         -- Stall if load is incomplete
-        when (loadCount.val .>. 2) do
-          stall <== true
+        if loadCount.val .>. 2
+          then stall <== true
+          else gcRestoreStack <== false
         -- Load next cell pair
         load heap (loadPtr.val)
         loadPtr <== loadPtr.val - 1
         loadCount <== loadCount.val - 2
 
       -- Store instruction (this code also active when gcSaveStack is true)
-      when (instrReg.val.isStore .|. gcSaveStack.val) do
+      let isStoreReady = instrReg.val.isStore .&. gcActive.val.inv
+      when (isStoreReady .|. gcSaveStack.val) do
         storeLen <== storeLen.val - 2
         -- Write top two elements to heap
         let stkTop2 =
@@ -323,6 +332,9 @@ makeCore debugIn = do
   -- Size of the stack before/after GC
   gcStackSize :: Reg StackPtr <- makeReg dontCare
 
+  -- Pointer to stack when stored on heap
+  gcStackPtr :: Reg HeapPtr <- makeReg dontCare
+
   -- GC copy mode (copier inactive if 0, otherwise active)
   gcCopyMode :: Reg (Bit 3) <- makeReg 0
 
@@ -353,6 +365,8 @@ makeCore debugIn = do
         else gcCopyMode <== 0
 
     -- 2. If object not already collected then collect it
+-- TODO: long path heap.out -> heap_data_in
+-- TODO: closure/tuple of len 0 ok? assert()
     when (gcCopyMode.val .==. 2) do
       let (cell1, cell2) = heap.out
       if cell1.tag .==. gcTag.fromInteger
@@ -362,16 +376,17 @@ makeCore debugIn = do
           gcCopyMode <== 0
         else do
           -- Determine object length in number of cell pairs
-          let len = dropBitsLSB @1 (cell1.getObjectLen + 1)
+          let len = dropBitsLSB @1 (gcCell.val.getObjectLen + 1)
           -- Offset of new object
-          let offset = dropBitsLSB @1 (cell1.getObjectLen)
+          let offset = dropBitsLSB @1 (gcCell.val.getObjectLen - 1)
           -- Determine new pointer
           let ptr = gcFrontPtr.val + offset.zeroExtend
           -- Update the gcCell to represent the new pointer
-          gcCell <== Cell { tag = gcCell.val.tag, content = ptr.zeroExtend}
+          let newCell = modifyPtr (gcCell.val) (ptr.zeroExtend)
+          gcCell <== newCell
           gcFrontPtr <== gcFrontPtr.val + len.zeroExtend
           -- Store GC indirection
-          let gcInd = Cell { tag = gcTag.fromInteger, content = ptr.zeroExtend }
+          let gcInd = newCell { tag = gcTag.fromInteger }
           store heap (gcCell.val.content.truncate) (gcInd, dontCare)
           -- Copy object to scratchpad
           gcPair <== heap.out
@@ -404,8 +419,11 @@ makeCore debugIn = do
         Seq [
           -- Step 1: write stack to heap
           Action do
+            gcFrontPtr <== 0
+            gcBackPtr <== 0
             storeLen <== stk.size
             gcStackSize <== stk.size
+            gcStackPtr <== zeroExtend (dropBitsLSB @1 (stk.size - 1))
             gcSaveStack <== true,
           Wait (gcSaveStack.val .==. false),
 
@@ -450,18 +468,31 @@ makeCore debugIn = do
 
           -- Step 4: Restore stack from heap
           Action do
+            display "GC restore stack loadPtr=" (gcStackPtr.val)
+            load heap (gcStackPtr.val)
             gcRestoreStack <== true
             loadCount <== gcStackSize.val
             loadOdd <== index @0 (gcStackSize.val)
-            loadPtr <== zeroExtend (dropBitsLSB @1 (gcStackSize.val + 1)),
+            loadPtr <== gcStackPtr.val - 1,
           Wait (gcRestoreStack.val .==. false),
 
           -- Finished
+          Action do display "GC done stack size = " (stk.size),
           Tick
         ]
 
   -- Compile GC recipe
   gcFinish <- run (gcStart.val) collector
+
+  -- Wait for GC to complete
+  always do
+    when gcFinish do
+      storeLen <== gcSavedStoreLen.val
+      gcActive <== false
+
+    -- Stall pipeline during GC
+    when (gcActive.val) do
+      stall <== true
 
   return (debugOut.toStream)
 

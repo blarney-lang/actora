@@ -46,6 +46,11 @@ getClosureArity cell = range @25 @20 (cell.content)
 getObjectPtr :: Cell -> HeapPtr
 getObjectPtr cell = truncate (range @19 @0 (cell.content))
 
+-- Change a pointer in a cell
+modifyPtr :: Cell -> HeapPtr -> Cell
+modifyPtr cell p = 
+  cell { content = (cell.getObjectLen) # (cell.getClosureArity) # 0 # p }
+
 -- Instructions
 -- ============
 
