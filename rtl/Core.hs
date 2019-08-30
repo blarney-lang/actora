@@ -189,7 +189,6 @@ makeCore debugIn = do
       -- Store instruction
       when (instr.isStore) do
         when (hp.val .>=. GCThreshold) do
-          display "Starting GC stack size = " (stk.size)
           gcStart <== true
           gcActive <== true
           gcSavedStoreLen <== instr.getStoreLen.zeroExtend
@@ -363,10 +362,12 @@ makeCore debugIn = do
       if (gcCell.val.isPtr)
         then gcCopyMode <== 2
         else gcCopyMode <== 0
+      -- Assuming it's a pointer, compute new address/length for object
+      let offset = dropBitsLSB @1 (gcCell.val.getObjectLen - 1)
+      gcCopyLen <== offset.zeroExtend
+      gcCopyToAddr <== gcFrontPtr.val + offset.zeroExtend
 
     -- 2. If object not already collected then collect it
--- TODO: long path heap.out -> heap_data_in
--- TODO: closure/tuple of len 0 ok? assert()
     when (gcCopyMode.val .==. 2) do
       let (cell1, cell2) = heap.out
       if cell1.tag .==. gcTag.fromInteger
@@ -375,12 +376,12 @@ makeCore debugIn = do
           gcCell <== cell1 { tag = gcCell.val.tag }
           gcCopyMode <== 0
         else do
+          when (gcCell.val.getObjectLen .==. 0) do
+            display "Invariant broken: zero-length object"
           -- Determine object length in number of cell pairs
           let len = dropBitsLSB @1 (gcCell.val.getObjectLen + 1)
-          -- Offset of new object
-          let offset = dropBitsLSB @1 (gcCell.val.getObjectLen - 1)
           -- Determine new pointer
-          let ptr = gcFrontPtr.val + offset.zeroExtend
+          let ptr = gcCopyToAddr.val
           -- Update the gcCell to represent the new pointer
           let newCell = modifyPtr (gcCell.val) (ptr.zeroExtend)
           gcCell <== newCell
@@ -390,8 +391,6 @@ makeCore debugIn = do
           store heap (gcCell.val.content.truncate) (gcInd, dontCare)
           -- Copy object to scratchpad
           gcPair <== heap.out
-          gcCopyLen <== offset.zeroExtend
-          gcCopyToAddr <== ptr
           gcCopyFromAddr <== gcCell.val.content.truncate - 1
           gcCopyMode <== 3
   
@@ -468,7 +467,6 @@ makeCore debugIn = do
 
           -- Step 4: Restore stack from heap
           Action do
-            display "GC restore stack loadPtr=" (gcStackPtr.val)
             load heap (gcStackPtr.val)
             gcRestoreStack <== true
             loadCount <== gcStackSize.val
@@ -477,7 +475,6 @@ makeCore debugIn = do
           Wait (gcRestoreStack.val .==. false),
 
           -- Finished
-          Action do display "GC done stack size = " (stk.size),
           Tick
         ]
 
