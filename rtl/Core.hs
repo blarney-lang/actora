@@ -90,8 +90,6 @@ makeCore debugIn = do
   -- Temporary state for multicycle primitive
   opReg1 :: Reg Cell <- makeReg dontCare
   opReg2 :: Reg Cell <- makeReg dontCare
-  primResult :: Reg (Bit 32) <- makeReg dontCare
-  primStage :: Reg (Bit 1) <- makeReg dontCare
 
   -- Garbage collector state used in CPU pipeline
   gcStart :: Reg (Bit 1) <- makeDReg false
@@ -259,7 +257,6 @@ makeCore debugIn = do
       when (instr.isMultiPrim) do
         opReg1 <== stk.top1
         opReg2 <== stk.top2
-        primStage <== 0
         stall <== true
 
       -- Halt instruction
@@ -363,16 +360,10 @@ makeCore debugIn = do
         let rightResult = (rext # op1) .>>>. amount
         -- Result of shift
         let shiftResult = i.isLeftShift ? (leftResult, rightResult.truncate)
-        -- Compute
-        when (primStage.val .==. 0) do
-          if i.isBitwise
-            then primResult <== bitwiseResult
-            else primResult <== shiftResult
-          primStage <== 1
-          stall <== true
-        when (primStage.val .==. 1) do
-          pop stk 2
-          push1 stk (Cell { tag = intTag, content = primResult.val })
+        -- Overall result
+        let result = i.isBitwise ? (bitwiseResult, shiftResult)
+        pop stk 2
+        push1 stk (Cell { tag = intTag, content = result })
 
   -- Garbage collector
   -- =================
