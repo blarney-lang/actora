@@ -35,6 +35,18 @@ NotEq       | 1000110010           |                      |
 Less        | 1000110100           |                      |
             +----------------------+----------------------+
 GreaterEq   | 1000110110           |                      |
+            +----------------------+----------------------+
+And         | 1001000000           |                      |
+            +----------------------+----------------------+
+Or          | 1001000001           |                      |
+            +----------------------+----------------------+
+Xor         | 1001000010           |                      |
+            +----------------------+----------------------+
+ShiftRight  | 1001000100           |                      |
+            +----------------------+----------------------+
+AShiftRight | 1001000101           |                      |
+            +----------------------+----------------------+
+ShiftLeft   | 1001000110           |                      |
             +-----21---------------+----------------------+
 CJumpPop    | 0000 | pop<6>        | addr<16>             |
             +------+-------20------+----------------------+
@@ -288,6 +300,75 @@ jump is taken, a given number of items are popped from the stack.
 +------+--------+----------+
 | 0000 | pop<6> | addr<16> |
 +------+--------+----------+
+```
+
+## And
+
+Replace the top two stack elements with their bitwise conjunction.
+
+```
+25          15     
++------------+------------+
+| 1001000000 | unused<16> |
++------------+------------+
+```
+
+## Or
+
+Replace the top two stack elements with their bitwise disjunction.
+
+```
+25          15     
++------------+------------+
+| 1001000001 | unused<16> |
++------------+------------+
+```
+
+## Xor
+
+Replace the top two stack elements with their bitwise xor.
+
+```
+25          15     
++------------+------------+
+| 1001000010 | unused<16> |
++------------+------------+
+```
+
+## ShiftRight
+
+Replace the top two stack elements with the first element logically
+shifted right by the second element.
+
+```
+25          15
++------------+------------+
+| 1001000100 | unused<16> |
++------------+------------+
+```
+
+# AShiftRight
+
+Replace the top two stack elements with the first element
+arithmetically shifted right by the second element.
+
+```
+25          15
++------------+------------+
+| 1001000101 | unused<16> |
++------------+------------+
+```
+
+# ShiftLeft
+
+Replace the top two stack elements with the first element logically
+shifted left by the second element.
+
+```
+25          15
++------------+------------+
+| 1001000110 | unused<16> |
++------------+------------+
 ```
 
 ## Error codes

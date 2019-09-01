@@ -43,6 +43,13 @@ data Prim =
   | PrimNotEq
   | PrimLess
   | PrimGreaterEq
+  | PrimInv
+  | PrimAnd
+  | PrimOr
+  | PrimXor
+  | PrimShiftLeft
+  | PrimShiftRight
+  | PrimArithShiftRight
   deriving Show
 
 -- Instruction set

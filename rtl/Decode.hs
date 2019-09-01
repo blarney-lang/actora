@@ -67,7 +67,7 @@ operand = range @15 @0
 
 -- Is it a Push instruction?
 isPush :: Instr -> Bit 1
-isPush i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0000)
+isPush i = index @25 i .&. (range @6 @2 (i.opcode) .==. 0b00000)
 
 -- Determine value to push
 getPushVal :: Instr -> Cell
@@ -81,7 +81,7 @@ getPushVal i =
 
 -- Is it a Slide instruction?
 isSlide :: Instr -> Bit 1
-isSlide i = index @25 i .&. (range @5 @1 (i.opcode) .==. 0b00010)
+isSlide i = index @25 i .&. (range @6 @1 (i.opcode) .==. 0b000010)
 
 -- Assuming isSlide, is it a Return instruction?
 isReturn :: Instr -> Bit 1
@@ -97,11 +97,11 @@ getSlideLen = range @5 @0
 
 -- Is it a Copy instruction?
 isCopy :: Instr -> Bit 1
-isCopy i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b000110)
+isCopy i = index @25 i .&. (range @6 @0 (i.opcode) .==. 0b0000110)
 
 -- Is it a Jump, IJump instruction?
 isControl :: Instr -> Bit 1
-isControl i = index @25 i .&. (range @5 @2 (i.opcode) .==. 0b0010)
+isControl i = index @25 i .&. (range @6 @2 (i.opcode) .==. 0b00010)
 
 -- Assuming isControl, is it a direct or indirect jump?
 isIndirect :: Instr -> Bit 1
@@ -109,7 +109,7 @@ isIndirect = index @16
 
 -- Is it a Load instruction?
 isLoad :: Instr -> Bit 1
-isLoad i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001101)
+isLoad i = index @25 i .&. (range @6 @0 (i.opcode) .==. 0b0001101)
 
 -- Assuming isLoad, should the pointer be popped before loading?
 isLoadPop :: Instr -> Bit 1
@@ -117,7 +117,7 @@ isLoadPop = index @15
 
 -- Is it a Store instruction?
 isStore :: Instr -> Bit 1
-isStore i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001110)
+isStore i = index @25 i .&. (range @6 @0 (i.opcode) .==. 0b0001110)
 
 -- What's the tag for data being stored?
 getStoreTag :: Instr -> Tag
@@ -142,7 +142,7 @@ makeStorePtr i p =
 
 -- Is it a Halt instuction?
 isHalt :: Instr -> Bit 1
-isHalt i = index @25 i .&. (range @5 @0 (i.opcode) .==. 0b001111)
+isHalt i = index @25 i .&. (range @6 @0 (i.opcode) .==. 0b0001111)
 
 -- Is it a primitive function?
 isPrim :: Instr -> Bit 1
@@ -203,3 +203,35 @@ isMatchNeg = index @21
 -- Get condition from Match instruction
 getMatchCond :: Instr -> Bit 3
 getMatchCond = range @18 @16
+
+-- Is it a multicycle primitive?
+isMultiPrim :: Instr -> Bit 1
+isMultiPrim i = index @25 i .&. index @6 (i.opcode)
+
+-- Assuming isMultiPrim, is it a bitwise operation?
+isBitwise :: Instr -> Bit 1
+isBitwise i = inv (index @2 (i.opcode))
+
+-- Assuming isBitwise, is it a bitwise and?
+isAnd :: Instr -> Bit 1
+isAnd i = range @1 @0 (i.opcode) .==. 0b00
+
+-- Assuming isBitwise, is it a bitwise or?
+isOr :: Instr -> Bit 1
+isOr i = range @1 @0 (i.opcode) .==. 0b01
+
+-- Assuming isBitwise, is it a bitwise xor?
+isXor :: Instr -> Bit 1
+isXor i = range @1 @0 (i.opcode) .==. 0b10
+
+-- Assuming isMultiPrim, is it a shift operation?
+isShift :: Instr -> Bit 1
+isShift i = index @2 (i.opcode)
+
+-- Assuming isShift, is it a left shift?
+isLeftShift :: Instr -> Bit 1
+isLeftShift i = index @1 (i.opcode)
+
+-- Assuming isShift, is it an arithmetic shift?
+isArithShift :: Instr -> Bit 1
+isArithShift i = index @0 (i.opcode)

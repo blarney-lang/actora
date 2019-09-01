@@ -3,6 +3,7 @@
 module Semantics where
 
 import StackIR 
+import Data.Bits
 import Data.Maybe
 import Prelude as P
 import Data.Map as M
@@ -119,6 +120,13 @@ step (pc, i, h, s, fs) =
                              then ATOM "false" else ATOM "true")
             PrimLess -> (2, if x < y then ATOM "true" else ATOM "false")
             PrimGreaterEq -> (2, if x >= y then ATOM "true" else ATOM "false")
+            PrimInv -> (1, INT (complement x))
+            PrimAnd -> (2, INT (x .&. y))
+            PrimOr -> (2, INT (x .|. y))
+            PrimXor -> (2, INT (x `xor` y))
+            PrimShiftLeft -> (2, INT (x `shiftL` y))
+            PrimShiftRight -> (2, INT (abs x `shiftR` y))
+            PrimArithShiftRight -> (2, INT (x `shiftR` y))
     -- Halt
     HALT err -> (pc, i, h, s, fs { flagHalt = Just err })
 

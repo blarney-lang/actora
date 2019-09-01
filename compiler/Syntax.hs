@@ -51,7 +51,10 @@ data Decl =
 -- ==========
 
 isPrim :: Id -> Bool
-isPrim id = id `elem` ["+", "-", "==", "/=", "<", "<=", ">", ">="]
+isPrim id = id `elem`
+  [ "+", "-", "==", "/=", "<", "<=", ">", ">="
+  , "band", "bor", "bxor", "bsl", "bsr", "bsra"
+  ]
 
 -- Traversal
 -- =========

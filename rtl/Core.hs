@@ -87,6 +87,12 @@ makeCore debugIn = do
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
   doPop :: Reg (Bit 1) <- makeReg dontCare
 
+  -- Temporary state for multicycle primitive
+  opReg1 :: Reg Cell <- makeReg dontCare
+  opReg2 :: Reg Cell <- makeReg dontCare
+  primResult :: Reg (Bit 32) <- makeReg dontCare
+  primStage :: Reg (Bit 1) <- makeReg dontCare
+
   -- Garbage collector state used in CPU pipeline
   gcStart :: Reg (Bit 1) <- makeDReg false
   gcActive :: Reg (Bit 1) <- makeReg false
@@ -215,10 +221,13 @@ makeCore debugIn = do
 
       -- Primitive instruction
       when (instr.isPrim) do
+        display "Prim"
         let op1 = stk.top1.content
         let op2 = stk.top2.content
         -- Top element will be replaced
-        pop stk 2
+        let popAmount =
+             buffer ((instr2.isArith .&. instr2.isSetUpper) ? (1, 2))
+        pop stk popAmount
         -- Add/sub result
         let add1 :: Bit 33 = op1.signExtend
         let add2 :: Bit 33 = op2.signExtend
@@ -245,7 +254,14 @@ makeCore debugIn = do
             tag = instr.isComparison ? (atomTag, stk.top1.tag)
           , content = result
           }
-        
+ 
+      -- Multicycle primitive instruction
+      when (instr.isMultiPrim) do
+        opReg1 <== stk.top1
+        opReg2 <== stk.top2
+        primStage <== 0
+        stall <== true
+
       -- Halt instruction
       when (instr.isHalt) do
         if debugOut.notFull
@@ -324,6 +340,39 @@ makeCore debugIn = do
         -- Pop top element(s) from stack
         let popAmount = storeLen.val .==. 1 ? (1, 2)
         pop stk popAmount
+
+      -- Multicycle primitive instruction
+      when (instrReg.val.isMultiPrim) do
+        let i = instrReg.val
+        let op1 = opReg1.val.content
+        let op2 = opReg2.val.content
+        -- Result of bitwise operation
+        let bitwiseResult =
+              select [
+                i.isAnd --> op1 .&. op2,
+                i.isOr  --> op1 .|. op2,
+                i.isXor --> op1 .^. op2
+              ]
+        -- Shift amount
+        let amount :: Bit 5 = op2.truncate
+        -- Result of left shift
+        let leftResult = op1 .<<. amount
+        -- Right-shift bit extension
+        let rext = instrReg.val.isArithShift ? (index @31 op1, 0);
+        -- Result of right shift
+        let rightResult = (rext # op1) .>>>. amount
+        -- Result of shift
+        let shiftResult = i.isLeftShift ? (leftResult, rightResult.truncate)
+        -- Compute
+        when (primStage.val .==. 0) do
+          if i.isBitwise
+            then primResult <== bitwiseResult
+            else primResult <== shiftResult
+          primStage <== 1
+          stall <== true
+        when (primStage.val .==. 1) do
+          pop stk 2
+          push1 stk (Cell { tag = intTag, content = primResult.val })
 
   -- Garbage collector
   -- =================
