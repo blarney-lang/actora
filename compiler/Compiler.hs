@@ -304,6 +304,12 @@ compile modName decls =
     exp env (Apply (Fun "bsr" n) [e0, e1]) = prim env PrimShiftRight [e0, e1]
     exp env (Apply (Fun "bsra" n) [e0, e1]) =
       prim env PrimArithShiftRight [e0, e1]
+    -- Appliation of atom
+    exp env (Apply (Atom x) es) =
+      error ("Application of non-function '" ++ x ++ "'")
+    -- Appliation of int
+    exp env (Apply (Int i) es) =
+      error ("Application of non-function '" ++ show i ++ "'")
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n == length es = do
@@ -459,6 +465,12 @@ compile modName decls =
       (is1, env1) <- match (push env [v]) v p (InstrLabel "$bind_fail")
       is2 <- seq env1 rest k
       return (is0 ++ is1 ++ is2)
+    -- Appliation of atom
+    seq env (Apply (Atom x) es : rest) _ =
+      error ("Application of non-function '" ++ x ++ "'")
+    -- Appliation of int
+    seq env (Apply (Int i) es : rest) _ =
+      error ("Application of non-function '" ++ show i ++ "'")
     -- Tail call of primitive function
     seq env [Apply (Fun f n) es] Nothing
       | isPrim f = 
