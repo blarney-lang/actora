@@ -10,26 +10,32 @@
 // Instruction decoding
 // ====================
 
-#define I_PushIPtr  0b1000000000
-#define I_PushInt   0b1000000001
-#define I_PushAtom  0b1000000010
-#define I_Slide     0b1000000100
-#define I_Return    0b1000000101
-#define I_Copy      0b1000000110
-#define I_Jump      0b1000001010
-#define I_IJump     0b1000001011
-#define I_Load      0b1000001101
-#define I_Store     0b1000001110
-#define I_Halt      0b1000001111
-#define I_Add       0b1000100000
-#define I_AddImm    0b1000100001
-#define I_Sub       0b1000100010
-#define I_SubImm    0b1000100011
-#define I_SetUpper  0b1000100101
-#define I_Eq        0b1000110000
-#define I_NotEq     0b1000110010
-#define I_Less      0b1000110100
-#define I_GreaterEq 0b1000110110
+#define I_PushIPtr    0b1000000000
+#define I_PushInt     0b1000000001
+#define I_PushAtom    0b1000000010
+#define I_Slide       0b1000000100
+#define I_Return      0b1000000101
+#define I_Copy        0b1000000110
+#define I_Jump        0b1000001010
+#define I_IJump       0b1000001011
+#define I_Load        0b1000001101
+#define I_Store       0b1000001110
+#define I_Halt        0b1000001111
+#define I_Add         0b1000100000
+#define I_AddImm      0b1000100001
+#define I_Sub         0b1000100010
+#define I_SubImm      0b1000100011
+#define I_SetUpper    0b1000100101
+#define I_Eq          0b1000110000
+#define I_NotEq       0b1000110010
+#define I_Less        0b1000110100
+#define I_GreaterEq   0b1000110110
+#define I_And         0b1001000000
+#define I_Or          0b1001000001
+#define I_Xor         0b1001000010
+#define I_ShiftRight  0b1001000100
+#define I_AShiftRight 0b1001000101
+#define I_ShiftLeft   0b1001000110
 
 // Get 10-bit opcode field from instruction
 inline uint32_t getOpcode(uint32_t instr)
@@ -509,6 +515,29 @@ uint32_t run(Bytecode* code, State* s)
       s->sp--;
       s->pc++;
       s->cycles++;
+    }
+    else if (op == I_And || op == I_Or || op == I_Xor ||
+             op == I_ShiftLeft || op == I_ShiftRight ||
+             op == I_AShiftRight) {
+      if (s->sp < 2) return EStackIndex;
+      Cell* a = &s->stack[s->sp-1];
+      Cell* b = &s->stack[s->sp-2];
+      if (a->tag.kind != INT || b->tag.kind != INT) return EArith;
+      if (op == I_And)
+        b->val = (uint32_t) ((int32_t) a->val & (int32_t) b->val);
+      else if (op == I_Or)
+        b->val = (uint32_t) ((int32_t) a->val | (int32_t) b->val);
+      else if (op == I_Xor)
+        b->val = (uint32_t) ((int32_t) a->val ^ (int32_t) b->val);
+      else if (op == I_ShiftLeft)
+        b->val = (uint32_t) ((int32_t) a->val << (int32_t) b->val);
+      else if (op == I_AShiftRight)
+        b->val = (uint32_t) ((int32_t) a->val >> (int32_t) b->val);
+      else if (op == I_ShiftRight)
+        b->val = (uint32_t) ((uint32_t) a->val >> (uint32_t) b->val);
+      s->sp--;
+      s->pc++;
+      s->cycles+=2;
     }
     else if (op == I_Halt) {
       return getOperand(instr);

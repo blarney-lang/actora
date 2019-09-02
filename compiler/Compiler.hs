@@ -58,6 +58,14 @@ removeIf ds = onExp rem ds
     toCond ((cond, rhs):alts) = 
       Cond (rem cond) (map rem rhs) [toCond alts]
 
+-- Remove unary primitive operators
+removeUnaryPrim :: [Decl] -> [Decl]
+removeUnaryPrim = onExp rem
+  where
+    rem (Apply (Fun "bnot" 1) [x]) =
+      Apply (Fun "bxor" 2) [rem x, Int 0xffffffff]
+    rem other = descend rem other
+
 -- Extract free variables from an expression
 free :: Exp -> [Id]
 free (Var v) = [v]
@@ -189,6 +197,7 @@ core modName =
   . removeIf
   . desugarDoNotation
   . desugarListComp
+  . removeUnaryPrim
   . removeId
   . desugarList
   . desugarListEnum
@@ -288,6 +297,13 @@ compile modName decls =
     exp env (Apply (Fun "<=" n) [e0, e1]) = prim env PrimGreaterEq [e1, e0]
     exp env (Apply (Fun ">" n) [e0, e1]) = prim env PrimLess [e1, e0]
     exp env (Apply (Fun ">=" n) [e0, e1]) = prim env PrimGreaterEq [e0, e1]
+    exp env (Apply (Fun "band" n) [e0, e1]) = prim env PrimAnd [e0, e1]
+    exp env (Apply (Fun "bor" n) [e0, e1]) = prim env PrimOr [e0, e1]
+    exp env (Apply (Fun "bxor" n) [e0, e1]) = prim env PrimXor [e0, e1]
+    exp env (Apply (Fun "bsl" n) [e0, e1]) = prim env PrimShiftLeft [e0, e1]
+    exp env (Apply (Fun "bsr" n) [e0, e1]) = prim env PrimShiftRight [e0, e1]
+    exp env (Apply (Fun "bsra" n) [e0, e1]) =
+      prim env PrimArithShiftRight [e0, e1]
     -- Saturated application of known function
     exp env (Apply (Fun f n) es)
       | n == length es = do

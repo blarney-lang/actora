@@ -173,6 +173,18 @@ encode instrs =
           unsigned 10 0b1000110100 <.> unsigned 16 0
         PRIM PrimGreaterEq ->
           unsigned 10 0b1000110110 <.> unsigned 16 0
+        PRIM PrimAnd ->
+          unsigned 10 0b1001000000 <.> unsigned 16 0
+        PRIM PrimOr ->
+          unsigned 10 0b1001000001 <.> unsigned 16 0
+        PRIM PrimXor ->
+          unsigned 10 0b1001000010 <.> unsigned 16 0
+        PRIM PrimShiftRight ->
+          unsigned 10 0b1001000100 <.> unsigned 16 0
+        PRIM PrimArithShiftRight ->
+          unsigned 10 0b1001000101 <.> unsigned 16 0
+        PRIM PrimShiftLeft ->
+          unsigned 10 0b1001000110 <.> unsigned 16 0
         HALT err ->
           unsigned 10 0b1000001111 <.> unsigned 16 (errorCode err)
         MATCH cond ->

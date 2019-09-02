@@ -115,9 +115,12 @@ expUnOp op = Prefix (reservedOp op >> return apply1)
 
 opTable =
   [ [ expUnOp "bnot" ]
-  , [ expBinOp ">>" AssocLeft, expBinOp "<<" AssocLeft]
+  , [ expBinOp "bsr" AssocLeft
+    , expBinOp "bsra" AssocLeft
+    , expBinOp "bsl" AssocLeft ]
   , [ expBinOp "*" AssocLeft, expBinOp "div" AssocLeft
     , expBinOp "band" AssocLeft ]
+  , [ expBinOp "bxor" AssocLeft ]
   , [ expBinOp "+" AssocLeft, expBinOp "-" AssocLeft
     , expBinOp "bor" AssocLeft ]
   , [ expBinOp "++" AssocRight ]

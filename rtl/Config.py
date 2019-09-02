@@ -11,14 +11,19 @@ p["LogInstrMemSize"] = 11
 # Stack size (in cells)
 p["LogStackSize"] = 11
 
-# Return stack size (in instruction pointers)
-p["LogRetStackSize"] = 10
-
 # Heap size (in cells)
 p["LogHeapSize"] = 13
 
 # Heap size (in cell pairs)
 p["LogHeapSizeMinusOne"] = p["LogHeapSize"] - 1
+
+# GC scratchpad size (in cell pairs)
+p["LogScratchpadSizeMinusOne"] = p["LogHeapSizeMinusOne"] - 1
+
+# GC threshold (GC invoked when heap size passes this)
+p["GCThreshold"] = (
+    (2 ** p["LogHeapSizeMinusOne"]) - (2 ** (p["LogStackSize"]-1)) - 32
+  )
 
 # Emit parameters in desired format
 if len(sys.argv) > 1:
