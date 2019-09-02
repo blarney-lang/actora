@@ -537,7 +537,7 @@ uint32_t run(Bytecode* code, State* s)
         b->val = (uint32_t) ((uint32_t) a->val >> (uint32_t) b->val);
       s->sp--;
       s->pc++;
-      s->cycles+=3;
+      s->cycles+=2;
     }
     else if (op == I_Halt) {
       return getOperand(instr);
