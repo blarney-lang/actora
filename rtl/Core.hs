@@ -7,6 +7,7 @@ import Blarney.Queue
 import Blarney.Stream
 
 -- Local imports
+import Util
 import Stack
 import Types
 import Decode
@@ -79,6 +80,7 @@ makeCore debugIn = do
   loadPtr :: Reg HeapPtr <- makeReg dontCare
   loadCount :: Reg StackPtr <- makeReg dontCare
   loadOdd :: Reg (Bit 1) <- makeReg dontCare
+  loadError :: Wire (Bit 1) <- makeWire false
 
   -- Temporary state for Store instruction
   storeLen :: Reg StackPtr <- makeReg dontCare
@@ -86,6 +88,10 @@ makeCore debugIn = do
   -- Temporary state for BranchPop instruction
   takeBranch :: Reg (Bit 1) <- makeReg dontCare
   doPop :: Reg (Bit 1) <- makeReg dontCare
+
+  -- Primitive exception
+  primError :: Wire (Bit 1) <- makeWire false
+
 
   -- Temporary state for multicycle primitive
   opReg1 :: Reg Cell <- makeReg dontCare
@@ -98,6 +104,24 @@ makeCore debugIn = do
   gcSaveStack :: Reg (Bit 1) <- makeReg false
   gcRestoreStack :: Reg (Bit 1) <- makeReg false
   gcFrontPtr :: Reg ScratchpadPtr <- makeReg dontCare
+  heapOverflow :: Wire (Bit 1) <- makeWire false
+
+  -- Exceptions
+  -- ==========
+
+  exception :: Reg (Bit 1) <- makeReg false
+  exceptionEmitted :: Reg (Bit 1) <- makeReg false
+  exceptionValue :: Reg (Bit 8) <- makeReg dontCare
+
+  always do
+    -- Register exception
+    exception <== stk.overflow .|. stk.underflow .|.
+      heapOverflow.val .|. loadError.val .|. primError.val
+
+    -- Display and emit exception code
+    when (exception.val .&. exceptionEmitted.val.inv .&. debugOut.notFull) do
+      enq debugOut (excUnknown.fromInteger)
+      exceptionEmitted <== true
 
   -- Stage 1: Fetch
   -- ==============
@@ -182,6 +206,7 @@ makeCore debugIn = do
 
       -- Load instruction
       when (instr.isLoad) do
+        loadError <== stk.top1.isPtr.inv
         load heap (stk.top1.getObjectPtr)
         loadPtr <== stk.top1.getObjectPtr - 1
         loadCount <== stk.top1.getObjectLen.zeroExtend
@@ -219,9 +244,12 @@ makeCore debugIn = do
 
       -- Primitive instruction
       when (instr.isPrim) do
-        display "Prim"
         let op1 = stk.top1.content
         let op2 = stk.top2.content
+        -- Pop one element or two
+        let popOne = buffer (instr2.isArith .&. instr2.isSetUpper)
+        primError <== inv ((stk.top1.tag .==. intTag) .&.
+                             (popOne .|. (stk.top2.tag .==. intTag)))
         -- Top element will be replaced
         let popAmount =
              buffer ((instr2.isArith .&. instr2.isSetUpper) ? (1, 2))
@@ -343,6 +371,8 @@ makeCore debugIn = do
         let i = instrReg.val
         let op1 = opReg1.val.content
         let op2 = opReg2.val.content
+        primError <== inv ((opReg1.val.tag .==. intTag) .&.
+                             (opReg2.val.tag .==. intTag))
         -- Result of bitwise operation
         let bitwiseResult =
               select [
@@ -425,7 +455,10 @@ makeCore debugIn = do
           -- Update the gcCell to represent the new pointer
           let newCell = modifyPtr (gcCell.val) (ptr.zeroExtend)
           gcCell <== newCell
-          gcFrontPtr <== gcFrontPtr.val + len.zeroExtend
+          let (overflow, gcFrontPtrNew) =
+                (gcFrontPtr.val) `checkedAdd` (len.zeroExtend)
+          gcFrontPtr <== gcFrontPtrNew
+          heapOverflow <== overflow
           -- Store GC indirection
           let gcInd = newCell { tag = gcTag.fromInteger }
           store heap (gcCell.val.content.truncate) (gcInd, dontCare)

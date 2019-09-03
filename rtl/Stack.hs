@@ -2,6 +2,7 @@ module Stack where
 
 -- This module implements a full-throughput dual-port stack.
 
+import Util
 import Blarney
 import Blarney.RAM
 
@@ -17,15 +18,18 @@ data Stack n a =
   , push2 :: a -> Action ()
     -- Push nth item from top
     -- (n can be negative to implement a slide)
-  , copy  :: Bit n -> Action ()
+  , copy :: Bit n -> Action ()
     -- Pop any number of items
     -- (can be called in parallel with push1)
-  , pop   :: Bit n -> Action ()
+  , pop :: Bit n -> Action ()
     -- Size of the stack
-  , size  :: Bit n
+  , size :: Bit n
     -- Top two stack values
-  , top1  :: a
-  , top2  :: a
+  , top1 :: a
+  , top2 :: a
+    -- Watch for stack underflow/overflow
+  , underflow :: Bit 1
+  , overflow :: Bit 1
   }
 
 -- Implementation
@@ -60,13 +64,17 @@ makeStack = do
   popWire <- makeWire 0
   let pushOrCopy = push1Wire.active .|. copyWire.active
 
+  -- Watch for overflow/underflow
+  let inc = push2Wire.active ? (2, pushOrCopy ? (1, 0))
+  let (underflowFlag, spAfterPop) = (sp.val) `checkedSub` (popWire.val)
+  let (overflowFlag, spNew) = spAfterPop `checkedAdd` inc
+
   always do
     -- Update stack pointer
-    let inc = push2Wire.active ? (2, pushOrCopy ? (1, 0))
-    sp <== (sp.val - popWire.val) + inc
+    sp <== spNew
     sp1 <== (sp1.val - popWire.val) + inc
 
-    -- Commonly address for ram1
+    -- Common address for ram1
     let addr1 = sp1.val - copyWire.val
 
     -- Pushing and not popping
@@ -114,11 +122,13 @@ makeStack = do
     Stack {
       push1 = \a -> push1Wire <== a
     , push2 = \a -> push2Wire <== a
-    , copy  = \n -> copyWire <== n
-    , pop   = \n -> popWire <== n
-    , size  = sp.val
-    , top1  = topVal1
-    , top2  = topVal2
+    , copy = \n -> copyWire <== n
+    , pop  = \n -> popWire <== n
+    , size = sp.val
+    , top1 = topVal1
+    , top2 = topVal2
+    , underflow = underflowFlag
+    , overflow = underflowFlag.inv .&. overflowFlag
     }
 
 -- Test bench

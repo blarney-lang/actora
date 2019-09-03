@@ -235,3 +235,22 @@ isLeftShift i = index @1 (i.opcode)
 -- Assuming isShift, is it an arithmetic shift?
 isArithShift :: Instr -> Bit 1
 isArithShift i = index @0 (i.opcode)
+
+-- Exceptions
+-- ==========
+
+excNone           = 0
+excStackOverflow  = 1
+excHeapOverflow   = 2
+excArith          = 3
+excLoadAddr       = 4
+excJumpAddr       = 5
+excStackIndex     = 6
+excUnknown        = 7
+excInstrIndex     = 8
+excUnknownInstr   = 9
+excStackUnderflow = 10
+excBindFail       = 16
+excCaseFail       = 17
+excEqnFail        = 18
+excApplyFail      = 19

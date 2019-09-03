@@ -1,4 +1,4 @@
-BENCHMARKS = fib queens mss braun while adjoxo redblack
+BENCHMARKS = fib queens mss braun while adjoxo redblack shiftsub
 CS = $(patsubst %, c-%, $(BENCHMARKS))
 CRUNS = $(patsubst %, run-c-%, $(BENCHMARKS))
 REDS = $(patsubst %, %.red, $(BENCHMARKS))
