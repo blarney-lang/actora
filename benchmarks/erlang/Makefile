@@ -1,6 +1,6 @@
 ERC_OPTS = +native -W0
 
-BENCHMARKS = fib queens mss braun while adjoxo redblack
+BENCHMARKS = fib queens mss braun while adjoxo redblack shiftsub
 BEAMS = $(patsubst %, %.beam, $(BENCHMARKS))
 RUNS = $(patsubst %, run-%, $(BENCHMARKS))
 
