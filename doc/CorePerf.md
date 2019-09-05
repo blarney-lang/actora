@@ -106,25 +106,25 @@ the Elite Core.
 ## 5. Elite C Backend v. Elite Core
 
 The Elite Core is comparable to the NIOS-II for both area and Fmax
-(both with a 393,216 byte heap).
+(both with 192KB of heap).
 
 Implementation | DE5-Net Area (ALMs) | DE5-Net FMax (MHz)
 -------------- | -----------------:  | -----------------:
-NIOS-II        | 901                 | 249
+NIOS-II        | 865                 | 276
 Elite core     | 1087                | 254     
 
 The Elite Core offers a useful performance improvement:
 
 Benchmark | NIOS-II (s) | GC (%) | Elite core (s) | %GC    | Speedup
 --------- | ----------: | -----: | -------------: | -----: | ------:
-fib       |   46.60     |      0 |  18.90         |     0  |  2.47
-adjoxo    |   14.45     |  40.42 |   3.99         |  2.35  |  3.62
-mss       |   10.05     |   1.20 |   4.73         |  0.23  |  2.12
-redblack  |   13.11     |  35.40 |   4.86         |  7.87  |  2.69
-while     |   15.25     |  41.56 |   3.30         |  2.31  |  4.62
-braun     |   13.68     |  50.52 |   2.92         | 15.10  |  4.68
-queens    |   10.11     |   3.66 |   6.09         |  0.10  |  1.66
-shiftsub  |   5.20      |      0 |   4.76         |     0  |  1.09
+fib       |   41.94     |      0 |  18.90         |     0  |  2.21
+adjoxo    |   13.01     |  40.42 |   3.99         |  2.35  |  3.26
+mss       |    9.05     |   1.20 |   4.73         |  0.23  |  1.91
+redblack  |   11.78     |  35.40 |   4.86         |  7.87  |  2.42
+while     |   13.73     |  41.56 |   3.30         |  2.31  |  4.16
+braun     |   12.31     |  50.52 |   2.92         | 15.10  |  4.22
+queens    |    9.10     |   3.66 |   6.09         |  0.10  |  1.49
+shiftsub  |    4.68     |      0 |   4.76         |     0  |  0.98
 
 The Elite Core is quite a modest effort at a language-specific CPU in
 the sense that aims to keep logic usage down -- we want to fit as many
