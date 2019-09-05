@@ -36,7 +36,7 @@ NIOS-II architectures.
 
 ## 2. Elite Core
 
-This is a simple [stack machine](doc/ISA.md) with a 3-stage pipeline
+This is a simple [stack machine](/doc/ISA.md) with a 3-stage pipeline
 (Fetch, Decode, Execute).  It has separate memories for instructions,
 stack data, and heap data.  The stack is implemented using a dual-port
 RAM, allowing two stack elements to be accessed per cycle.  The heap
@@ -61,14 +61,14 @@ and should strongly favour a register machine.
 
 Benchmark | Description
 --------- | -----------
-[fib](benchmarks/fib.erl) | Standard doubly-recursive fibonacci function
-[adjoxo](benchmarks/adjoxo.erl) | Adjudicator for naughts and crosses, involving sets as lists
-[mss](benchmarks/mss.erl) | Basic maximum segment sum function on lists
-[redblack](benchmarks/redblack.erl) | Insertion and membership functions on Red-Black trees
-[while](benchmarks/while.erl) | Operational semantics for a simple imperative language
-[braun](benchmarks/braun.erl) | Insertion and flattening functions on Braun trees
-[queens](benchmarks/queens.erl) | N-queens solver using success/fail continuation passing style
-[shiftsub](benchmarks/shiftsub.erl) | Binary long division
+[fib](/benchmarks/fib.erl) | Standard doubly-recursive fibonacci function
+[adjoxo](/benchmarks/adjoxo.erl) | Adjudicator for naughts and crosses, involving sets as lists
+[mss](/benchmarks/mss.erl) | Basic maximum segment sum function on lists
+[redblack](/benchmarks/redblack.erl) | Insertion and membership functions on Red-Black trees
+[while](/benchmarks/while.erl) | Operational semantics for a simple imperative language
+[braun](/benchmarks/braun.erl) | Insertion and flattening functions on Braun trees
+[queens](/benchmarks/queens.erl) | N-queens solver using success/fail continuation passing style
+[shiftsub](/benchmarks/shiftsub.erl) | Binary long division
 
 ## 4. HIPE v. Elite C Backend
 
@@ -105,14 +105,15 @@ the Elite Core.
 
 ## 5. Elite C Backend v. Elite Core
 
-The Elite Core is comparable to the NIOS-II for both area and Fmax.
+The Elite Core is comparable to the NIOS-II for both area and Fmax
+(both with a 393,216 byte heap).
 
 Implementation | DE5-Net Area (ALMs) | DE5-Net FMax (MHz)
 -------------- | -----------------:  | -----------------:
 NIOS-II        | 901                 | 249
 Elite core     | 1087                | 254     
 
-But the Elite Core offers a useful performance improvement:
+The Elite Core offers a useful performance improvement:
 
 Benchmark | NIOS-II (s) | GC (%) | Elite core (s) | %GC    | Speedup
 --------- | ----------: | -----: | -------------: | -----: | ------:
@@ -124,8 +125,6 @@ while     |   15.25     |  41.56 |   3.30         |  2.31  |  4.62
 braun     |   13.68     |  50.52 |   2.92         | 15.10  |  4.68
 queens    |   10.11     |   3.66 |   6.09         |  0.10  |  1.66
 shiftsub  |   5.20      |      0 |   4.76         |     0  |  1.09
-
-TODO: experimental params of NIOS-II and Core, commit latest NIOS-II params
 
 The Elite Core is quite a modest effort at a language-specific CPU in
 the sense that aims to keep logic usage down -- we want to fit as many
