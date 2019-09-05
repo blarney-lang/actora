@@ -15,5 +15,5 @@ SECTIONS
   __e_heapEnd = .;
   . += STACK_SIZE;
   __stackBase = . - 4;
-  ASSERT(. < 0x120000, "Data space exceeded")
+  ASSERT(. < 1572864, "Data space exceeded")
 }

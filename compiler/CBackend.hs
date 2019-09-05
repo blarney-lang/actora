@@ -399,7 +399,7 @@ genC opts = do
 
     -- Default heap size
     defaultHeapSize :: Int
-    defaultHeapSize = 65536
+    defaultHeapSize = 262144
     
     -- Makefile for standard C generator
     stdMakefile :: String
@@ -425,6 +425,7 @@ genC opts = do
           , "#include <stdlib.h>"
           , "#include <assert.h>"
           , "#include <setjmp.h>"
+          , "#include <sys/time.h>"
           ]
 
     helpers :: [String]
@@ -441,11 +442,12 @@ genC opts = do
       , "Word* nextFreePtr;"
       , "uint32_t* stackBase;"
       , ""
-      , if genMode opts == Gen_NIOSII_32
-        then "extern uint32_t __e_heapBase;"
-        else ""
-      , ""
-      ] ++
+      ] ++ ( if genMode opts == Gen_NIOSII_32
+             then [ "extern uint32_t __e_heapBase;" ]
+             else [ "struct timeval start, finish, diff;"
+                  , "double gcDuration = 0.0;"
+                  ]
+            ) ++
       [ "#define ATOM_" ++ mangle atom ++ " " ++ show n
       | (atom, n) <- zip atoms [0..] ] ++
       [ ""
@@ -722,7 +724,8 @@ genC opts = do
           , "  for (uint32_t i = 0; i < NUM_REGS; i++) _mark((Word) regs[i]);"
           ]
         else
-          [ "  // Flush registers onto stack"
+          [ "  gettimeofday(&start, NULL);"
+          , "  // Flush registers onto stack"
           , "  jmp_buf regs;"
           , "  uint32_t* regsPtr = (uint32_t*) &regs;"
           , "  for (uint32_t i = 0; i < sizeof(regs)/4; i++) regsPtr[i] = 0;"
@@ -740,10 +743,15 @@ genC opts = do
       , ""
       , "  // Sweep phase"
       , "  _sweep();"
-      , if genMode opts == Gen_NIOSII_32
-        then "perf_stop(1);"
-        else ""
-      , "  return 0;"
+      ] ++ ( if genMode opts == Gen_NIOSII_32
+             then ["perf_stop(1);"]
+             else [ "gettimeofday(&finish, NULL);"
+                  , "timersub(&finish, &start, &diff);"
+                  , "gcDuration += (double) diff.tv_sec +"
+                  , "              (double) diff.tv_usec / 1000000.0;"
+                  ]
+           ) ++
+      [ "  return 0;"
       , "}"
       , ""
       ]
@@ -779,7 +787,7 @@ genC opts = do
                 , "printf(\"GC cycles: 0x%x%x\\n\\n\", " ++
                     "perf_get_hi(1), perf_get_lo(1));"
                 ]
-           else []
+           else [ "printf(\"GC: %lf\\n\", gcDuration);" ]
          )
       ++ [ "  _render(result);"
          , "  printf(\"\\n\");"

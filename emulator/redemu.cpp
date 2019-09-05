@@ -5,7 +5,7 @@
 
 // Size (number of elements) of heap, stack, and return stack
 #define HEAP_SIZE      64000
-#define STACK_SIZE     4000
+#define STACK_SIZE     2048
 
 // Instruction decoding
 // ====================
