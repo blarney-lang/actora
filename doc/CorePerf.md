@@ -5,11 +5,11 @@ conforming to the actor model, parallelism is abundant, blindingly
 explicit, and without shared state.
 
 On POETS, we are exploring the design of a new kind of machine to
-support the actor model more directly -- specifically Erlang, one of
-the most successfull realisations of the actor model to date.  The key
-idea is to use a very large number of very simple cores that
-support communication via messages.  The first question, which we
-address below, is: *what does a simple Erlang core look like?*
+support the actor model more directly.  Here we focus on Erlang, one
+of the most successfull realisations of the actor model to date.  The
+key idea is to use a very large number of very simple cores.  The
+first question, which we address below, is: *what does a simple Erlang
+core look like?*
 
 We explore two approaches:
 
@@ -23,16 +23,15 @@ We explore two approaches:
 
 This is a C code generator that performs a like-for-like mapping from
 Erlang functions to C functions, and from Erlang variables to C
-variables.  As a result, it is both simple (1K lines of code) and
-efficient, exploiting the optimisation capabilities of the C compiler,
-such as tail-call optimisation, inlining, common subexpression
-elimination, and many more.  However, a big drawback of the approach
-is that the garbage collector must be *conservative* since pointers
-and integers cannot be distinguished in C.  This also means that the
-garbage collector cannot relocate objects, preventing the use of
-copying collectors, operating in O(survivors) time, that work well
-for functional languages.  The generated C code runs on both x86 and
-NIOS-II architectures.
+variables.  As a result, it is both simple and efficient, exploiting
+the optimisation capabilities of the C compiler, such as tail-call
+optimisation, inlining, common subexpression elimination, and many
+more.  However, a big drawback of the approach is that the garbage
+collector must be *conservative* since pointers and integers cannot be
+distinguished in C.  This also means that the garbage collector cannot
+relocate objects, preventing the use of copying collectors, operating
+in O(survivors) time, that work well for functional languages.  The
+generated C code runs on both x86 and NIOS-II architectures.
 
 ## 2. Elite Core
 
@@ -48,8 +47,8 @@ information about the object pointed-to, such as its length and arity
 to be checked without having to dereference. The core supports all the
 ALU primitives available on the NIOS-II.  It also includes a fast
 copying garbage collector, implemented as a small state-machine in
-hardware.  The compiler from Elite to stack code is straightforward
-(700 lines of code).
+hardware.  The compiler from Elite to stack code is small and
+straightforward.
 
 ## 3. Benchmarks
 
@@ -99,34 +98,38 @@ The results show that the Elite C backend is generally more efficient
 than HIPE.  It falls slightly short only in the heap-intensive
 benchmarks, were GC time (a known weakness) is significant.  It is
 possible that we could improve GC time by using LLVM as a target
-instead of C (allowing pointers and integers to be distinguished), but
-the effort to do so is also an important factor in the comparison with
-the Elite Core.
+instead of C (allowing pointers and integers to be distinguished).
 
 ## 5. Elite C Backend v. Elite Core
 
-The Elite Core is comparable to the NIOS-II for both area and Fmax
-(both with 192KB of heap).
+The Elite Core is slightly larger than a NIOS-II, and has a lower Fmax:
 
 Implementation | DE5-Net Area (ALMs) | DE5-Net FMax (MHz)
 -------------- | -----------------:  | -----------------:
-NIOS-II        | 865                 | 276
+NIOS-II        | 850                 | 323
 Elite core     | 1087                | 254     
 
-The Elite Core offers a useful performance improvement:
+Despite the lower Fmax, the Elite Core offers a slight performance
+improvement (both implementations use a 56KB heap):
 
 Benchmark | NIOS-II (s) | GC (%) | Elite core (s) | %GC    | Speedup
 --------- | ----------: | -----: | -------------: | -----: | ------:
-fib       |   41.94     |      0 |  18.90         |     0  |  2.21
-adjoxo    |   13.01     |  40.42 |   3.99         |  2.35  |  3.26
-mss       |    9.05     |   1.20 |   4.73         |  0.23  |  1.91
-redblack  |   11.78     |  35.40 |   4.86         |  7.87  |  2.42
-while     |   13.73     |  41.56 |   3.30         |  2.31  |  4.16
-braun     |   12.31     |  50.52 |   2.92         | 15.10  |  4.22
-queens    |    9.10     |   3.66 |   6.09         |  0.10  |  1.49
-shiftsub  |    4.68     |      0 |   4.76         |     0  |  0.98
+fib       |   35.92     |      0 |  18.90         |     0  |  1.90
+adjoxo    |   11.42     |  41.70 |   3.99         |  2.35  |  2.86
+mss       |    7.81     |   1.97 |   4.73         |  0.23  |  1.65
+redblack  |   11.26     |  39.47 |   4.86         |  7.87  |  2.31
+while     |   12.12     |  42.65 |   3.30         |  2.31  |  3.67
+braun     |   11.97     |  55.40 |   2.92         | 15.10  |  4.10
+queens    |    7.89     |   3.80 |   6.09         |  0.10  |  1.30
+shiftsub  |    4.04     |      0 |   4.76         |     0  |  0.85
 
-The Elite Core is quite a modest effort at a language-specific CPU in
+Again, the difference is most visible in the benchmarks where GC time
+is significant, which is a known weakness of the C backend (which
+could probably be improved using a more sophisticated LLVM backend
+instead).
+
+The Elite Core is quite a modest attempt at a language-specific CPU in
 the sense that aims to keep logic usage down -- we want to fit as many
-instances of this core on an FPGA as we can.  Higher performance is
-surely possible, but the cost in terms of area is currently unclear.
+instances of this core on an FPGA as we can.  But that goal has
+resulted in only a modest performance improvement over a
+space-optimised RISC core.
