@@ -87,7 +87,7 @@ redblack  | 0.35     |  0.37               | 30.00  |  0.94
 while     | 0.27     |  0.34               | 50.00  |  0.79
 braun     | 0.21     |  0.33               | 45.45  |  0.63
 queens    | 0.72     |  0.29               | 0.03   |  2.48
-shiftsub  | 0.85     |  0.11               | 0      |  7.72
+shiftsub  | 0.85     |  0.27               | 0      |  3.14
 
 These results were obtained from an `Intel(R) Core(TM) i7-6770HQ CPU @
 2.60GHz`.  The Elite C backend was given a 1MB heap.  The GC column
@@ -121,7 +121,7 @@ redblack  |   11.26     |  39.47 |   4.86         |  7.87  |  2.31
 while     |   12.12     |  42.65 |   3.30         |  2.31  |  3.67
 braun     |   11.97     |  55.40 |   2.92         | 15.10  |  4.10
 queens    |    7.89     |   3.80 |   6.09         |  0.10  |  1.30
-shiftsub  |    4.04     |      0 |   4.76         |     0  |  0.85
+shiftsub  |    7.41     |      0 |   4.76         |     0  |  1.55
 
 Again, the difference is most visible in the benchmarks where GC time
 is significant, which is a known weakness of the C backend (which
