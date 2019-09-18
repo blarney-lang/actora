@@ -1,6 +1,6 @@
-redemu: redemu.cpp
-	g++ -O2 redemu.cpp -o redemu
+actemu: actemu.cpp
+	g++ -O2 actemu.cpp -o actemu
 
 .PHONY: clean
 clean:
-	rm -f redemu
+	rm -f actemu

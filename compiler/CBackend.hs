@@ -787,7 +787,7 @@ genC opts = do
                 , "printf(\"GC cycles: 0x%x%x\\n\\n\", " ++
                     "perf_get_hi(1), perf_get_lo(1));"
                 ]
-           else [ "printf(\"GC: %lf\\n\", gcDuration);" ]
+           else [] -- [ "printf(\"GC: %lf\\n\", gcDuration);" ]
          )
       ++ [ "  _render(result);"
          , "  printf(\"\\n\");"

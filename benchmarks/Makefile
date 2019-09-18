@@ -1,11 +1,11 @@
 BENCHMARKS = fib queens mss braun while adjoxo redblack shiftsub
 CS = $(patsubst %, c-%, $(BENCHMARKS))
 CRUNS = $(patsubst %, run-c-%, $(BENCHMARKS))
-REDS = $(patsubst %, %.red, $(BENCHMARKS))
-REDRUNS = $(patsubst %, run-red-%, $(BENCHMARKS))
+ACTS = $(patsubst %, %.act, $(BENCHMARKS))
+ACTRUNS = $(patsubst %, run-act-%, $(BENCHMARKS))
 TIME = time -f "\ttime: %U"
 ELITE = $(ELITE_ROOT)/compiler/elite
-REDEMU = $(ELITE_ROOT)/emulator/redemu
+ACTEMU = $(ELITE_ROOT)/emulator/actemu
 
 .PHONY: all
 all: $(CS) $(REDS)
@@ -13,8 +13,8 @@ all: $(CS) $(REDS)
 .PHONY: run-c
 run-c: $(CRUNS)
 
-.PHONY: run-red
-run-red: $(REDRUNS)
+.PHONY: run-act
+run-act: $(ACTRUNS)
 
 $(ELITE):
 	make -C $(ELITE_ROOT)/compiler
@@ -22,7 +22,7 @@ $(ELITE):
 $(REDEMU):
 	make -C $(ELITE_ROOT)/emulator
 
-%.red: %.erl $(ELITE)
+%.act: %.erl $(ELITE)
 	$(ELITE) -b $< > $@
 
 c-%: %.erl $(ELITE)
@@ -34,8 +34,8 @@ c-%: %.erl $(ELITE)
 run-c-%: c-%
 	@echo "$<:" && $(TIME) ./$< && echo
 
-run-red-%: %.red $(REDEMU)
-	@echo "$<:" && $(REDEMU) ./$< && echo
+run-act-%: %.act $(ACTEMU)
+	@echo "$<:" && $(ACTEMU) ./$< && echo
 
 .PHONY: clean
 clean:

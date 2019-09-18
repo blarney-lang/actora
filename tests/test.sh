@@ -63,13 +63,13 @@ echo ""
 echo "TESTING STACK MACHINE EMULATOR"
 make -s -C ../emulator/
 rm -f *.got
-rm -rf red
-mkdir red
+rm -rf act
+mkdir act
 for PROG in $(ls *.erl); do
   BASE=$(basename $PROG .erl)
   echo -n "$BASE: "
-  $ELITE -b $PROG > red/$BASE.red
-  ../emulator/redemu red/$BASE.red | head -n 1 > $BASE.got
+  $ELITE -b $PROG > act/$BASE.act
+  ../emulator/actemu act/$BASE.act | head -n 1 > $BASE.got
   if cmp $BASE.got out/$BASE.out; then
     echo -e "${GREEN}OK${NC}"
   else
@@ -78,7 +78,7 @@ for PROG in $(ls *.erl); do
   fi
 done
 rm -f *.got
-rm -rf red
+rm -rf act
 
 # Checking correctness of core
 echo ""
