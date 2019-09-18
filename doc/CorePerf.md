@@ -109,8 +109,14 @@ Implementation | DE5-Net Area (ALMs) | DE5-Net FMax (MHz)
 NIOS-II        | 850                 | 323
 Elite core     | 1087                | 254     
 
+Implementation | DE10-Pro Area (ALMs) | DE10-Pro FMax (MHz)
+-------------- | ------------------:  | ------------------:
+NIOS-II        | 1154                 | 345
+Elite core     | 1229                 | 301     
+
 Despite the lower Fmax, the Elite Core offers a slight performance
-improvement (both implementations use a 56KB heap):
+improvement (results for DE5-Net, both implementations use a 56KB
+heap):
 
 Benchmark | NIOS-II (s) | GC (%) | Elite core (s) | %GC    | Speedup
 --------- | ----------: | -----: | -------------: | -----: | ------:
