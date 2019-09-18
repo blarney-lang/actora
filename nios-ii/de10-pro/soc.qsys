@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<system name="$${FILENAME}">
+<system name="soc">
  <component
    name="$${FILENAME}"
    displayName="$${FILENAME}"
    version="1.0"
    description=""
    tags=""
-   categories=""
+   categories="System"
    tool="QsysPro" />
  <parameter name="bonusData"><![CDATA[bonusData 
 {
@@ -1796,7 +1796,7 @@
                         <name>address</name>
                         <role>address</role>
                         <direction>Input</direction>
-                        <width>15</width>
+                        <width>14</width>
                         <lowerBound>0</lowerBound>
                         <vhdlType>STD_LOGIC_VECTOR</vhdlType>
                     </port>
@@ -1881,7 +1881,7 @@
                         </entry>
                         <entry>
                             <key>addressSpan</key>
-                            <value>131072</value>
+                            <value>65536</value>
                         </entry>
                         <entry>
                             <key>addressUnits</key>
@@ -1924,7 +1924,7 @@
                         </entry>
                         <entry>
                             <key>explicitAddressSpan</key>
-                            <value>131072</value>
+                            <value>65536</value>
                         </entry>
                         <entry>
                             <key>holdTime</key>
@@ -2113,11 +2113,11 @@
                     <suppliedSystemInfos>
                         <entry>
                             <key>ADDRESS_MAP</key>
-                            <value>&lt;address-map&gt;&lt;slave name='s1' start='0x0' end='0x20000' datawidth='32' /&gt;&lt;/address-map&gt;</value>
+                            <value>&lt;address-map&gt;&lt;slave name='s1' start='0x0' end='0x10000' datawidth='32' /&gt;&lt;/address-map&gt;</value>
                         </entry>
                         <entry>
                             <key>ADDRESS_WIDTH</key>
-                            <value>17</value>
+                            <value>16</value>
                         </entry>
                         <entry>
                             <key>MAX_SLAVE_DATA_WIDTH</key>
@@ -2174,7 +2174,7 @@
                     <name>address</name>
                     <role>address</role>
                     <direction>Input</direction>
-                    <width>15</width>
+                    <width>14</width>
                     <lowerBound>0</lowerBound>
                     <vhdlType>STD_LOGIC_VECTOR</vhdlType>
                 </port>
@@ -2259,7 +2259,7 @@
                     </entry>
                     <entry>
                         <key>addressSpan</key>
-                        <value>131072</value>
+                        <value>65536</value>
                     </entry>
                     <entry>
                         <key>addressUnits</key>
@@ -2283,7 +2283,6 @@
                     </entry>
                     <entry>
                         <key>bridgedAddressOffset</key>
-                        <value>0</value>
                     </entry>
                     <entry>
                         <key>bridgesToMaster</key>
@@ -2302,7 +2301,7 @@
                     </entry>
                     <entry>
                         <key>explicitAddressSpan</key>
-                        <value>131072</value>
+                        <value>65536</value>
                     </entry>
                     <entry>
                         <key>holdTime</key>
@@ -2536,7 +2535,7 @@
         </entry>
         <entry>
             <key>embeddedsw.CMacro.SIZE_VALUE</key>
-            <value>131072</value>
+            <value>65536</value>
         </entry>
         <entry>
             <key>embeddedsw.CMacro.WRITABLE</key>
@@ -6614,7 +6613,7 @@
                     <consumedSystemInfos>
                         <entry>
                             <key>ADDRESS_MAP</key>
-                            <value>&lt;address-map&gt;&lt;slave name='data_mem.s1' start='0x100000' end='0x120000' datawidth='32' /&gt;&lt;/address-map&gt;</value>
+                            <value>&lt;address-map&gt;&lt;slave name='data_mem.s1' start='0x100000' end='0x110000' datawidth='32' /&gt;&lt;/address-map&gt;</value>
                         </entry>
                         <entry>
                             <key>ADDRESS_WIDTH</key>
@@ -10288,7 +10287,21 @@
         </descriptors>
     </systemInfoParameterDescriptors>
     <systemInfos>
-        <connPtSystemInfos/>
+        <connPtSystemInfos>
+            <entry>
+                <key>clk</key>
+                <value>
+                    <connectionPointName>clk</connectionPointName>
+                    <suppliedSystemInfos/>
+                    <consumedSystemInfos>
+                        <entry>
+                            <key>CLOCK_RATE</key>
+                            <value>50000000</value>
+                        </entry>
+                    </consumedSystemInfos>
+                </value>
+            </entry>
+        </connPtSystemInfos>
     </systemInfos>
 </componentDefinition>]]></parameter>
   <parameter name="defaultBoundary"><![CDATA[<boundaryDefinition>

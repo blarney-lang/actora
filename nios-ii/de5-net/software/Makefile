@@ -1,6 +1,6 @@
 # Runtime options
-STACK_SIZE = 16384
-HEAP_SIZE = 196608
+STACK_SIZE = 8192
+HEAP_SIZE = 56000
 
 # Binary utilities
 CC      = nios2-elf-gcc
