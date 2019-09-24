@@ -58,7 +58,7 @@ generated C code runs on both x86 and NIOS-II architectures.
 
 ## 2. Actora Core
 
-This is a simple [stack machine](/doc/ISA.md) with a 3-stage pipeline
+This is a simple [stack machine](#6-actora-bytecode) with a 3-stage pipeline
 (Fetch, Decode, Execute).  It has separate memories for instructions,
 stack data, and heap data.  The stack is implemented using a dual-port
 RAM, allowing two stack elements to be accessed per cycle.  The heap
