@@ -6,7 +6,7 @@ coherent shared memories.  But for applications conforming to the
 actor model, parallelism is abundant, blindingly explicit, and without
 shared state.
 
-Actora is processor designed to support the actor model more directly,
+Actora is a processor designed to support the actor model more directly,
 using a large number of very simple cores running code written in
 a small Erlang-like language called Elite.  The work is in the
 preliminary stages.  So far, we have:
