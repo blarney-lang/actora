@@ -7,7 +7,7 @@ actor model, parallelism is abundant, blindingly explicit, and without
 shared state.
 
 Actora is processor designed to support the actor model more directly,
-using of large number of very simple cores running code written in
+using a large number of very simple cores running code written in
 a small Erlang-like language called Elite.  The work is in the
 preliminary stages.  So far, we have:
 
