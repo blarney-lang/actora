@@ -16,9 +16,9 @@ between off-chip memory and the cores.  So far, we have:
      a small Erlang-like language (no concurrency features yet!)
   * [Compiler](compiler/CBackend.hs)
     from Elite to C (runs on x86 and NIOS-II)
-  * [Actora bytecode](#5-actora-bytecode),
+  * [Actora bytecode](#6-actora-bytecode),
     a custom stack-machine ISA for Elite
-  * [Compiler](compiler/Compile.hs) from Elite to Actora bytecode
+  * [Compiler](compiler/Compiler.hs) from Elite to Actora bytecode
   * [Emulator](emulator/actemu.cpp) for Actora bytecode
   * [Benchmarks](benchmarks/) written in Elite
   * [Comparison](#4-hipe-versus-elite-c-backend)
