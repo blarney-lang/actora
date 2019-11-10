@@ -6,9 +6,9 @@ coherent shared memories.  But for applications conforming to the
 actor model, parallelism is abundant, blindingly explicit, and without
 shared state.
 
-Actora is a processor designed to support the actor model more directly,
-using a large number of very simple cores running code written in
-a small Erlang-like language called Elite.  The work is in the
+Actora is a processor designed to fit the actor model more directly,
+using a large number of very simple cores running code written in a
+small Erlang-like language called Elite.  The work is in the
 preliminary stages.  So far, we have:
 
   * [Elite](compiler/Syntax.hs),
@@ -58,20 +58,22 @@ generated C code runs on both x86 and NIOS-II architectures.
 
 ## 2. Actora Core
 
-This is a simple [stack machine](#6-actora-bytecode) with a 3-stage pipeline
-(Fetch, Decode, Execute).  It has separate memories for instructions,
-stack data, and heap data.  The stack is implemented using a dual-port
-RAM, allowing two stack elements to be accessed per cycle.  The heap
-memory is two cells wide, since almost all heap objects contain at
-least two cells.  Cells on the stack and heap are both tagged with
-type information.  The tags of pointer cells contain further
-information about the object pointed-to, such as its length and arity
-(if it is a closure), often allowing patterns to be matched and types
-to be checked without having to dereference. The core supports a set
-of ALU primitives similar to those available on the NIOS-II.  It also
-includes a fast copying garbage collector, implemented as a small
-state-machine in hardware.  The compiler from Elite to stack code is
-small and straightforward.
+This is a simple [stack machine](#6-actora-bytecode) with a 3-stage
+pipeline (Fetch, Decode, Execute).  It has separate memories for
+instructions, stack data, and heap data.  The stack is implemented
+using a dual-port RAM, allowing two stack elements to be accessed per
+cycle.  The heap memory is two cells wide, since almost all heap
+objects contain at least two cells.  Cells on the stack and heap are
+both tagged with type information.  The tags of pointer cells contain
+further information about the object pointed-to, such as its length
+and arity (if it is a closure), often allowing patterns to be matched
+and types to be checked without having to dereference. The core
+supports a set of ALU primitives similar to those available on the
+NIOS-II.  It also includes a fast copying garbage collector,
+implemented as a small state-machine in hardware.  The compiler from
+Elite to stack code is small and straightforward: in particular, there
+is no register-file/spill optimisation required, avoiding much
+complexity compared to a traditional RISC approach.
 
 ## 3. Elite Benchmarks
 
@@ -114,7 +116,7 @@ braun     | 0.21     |  0.33               | 45.45  |  0.63
 queens    | 0.72     |  0.29               | 0.03   |  2.48
 shiftsub  | 0.85     |  0.27               | 0      |  3.14
 
-These results were obtained from an `Intel(R) Core(TM) i7-6770HQ CPU @
+These results were obtained on an `Intel(R) Core(TM) i7-6770HQ CPU @
 2.60GHz`.  The Elite C backend was given a 1MB heap.  The GC column
 shows the proportion of time spent in the garbage collector
 for the Elite C backend, not HIPE.
@@ -155,7 +157,7 @@ queens    |    7.89     |   3.80 |   6.09         |  0.10  |  1.30
 shiftsub  |    7.41     |      0 |   4.76         |     0  |  1.55
 
 Again, the difference is most visible in the benchmarks where GC time
-is significant, which is a known weakness of the C backend (which
+is significant, which is a known weakness of the C backend (and
 could probably be improved using a more sophisticated LLVM backend
 instead).
 
