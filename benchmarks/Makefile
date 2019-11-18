@@ -4,8 +4,8 @@ CRUNS = $(patsubst %, run-c-%, $(BENCHMARKS))
 ACTS = $(patsubst %, %.act, $(BENCHMARKS))
 ACTRUNS = $(patsubst %, run-act-%, $(BENCHMARKS))
 TIME = time -f "\ttime: %U"
-ELITE = $(ELITE_ROOT)/compiler/elite
-ACTEMU = $(ELITE_ROOT)/emulator/actemu
+ELITE = $(ACTORA_ROOT)/compiler/elite
+ACTEMU = $(ACTORA_ROOT)/emulator/actemu
 
 .PHONY: all
 all: $(CS) $(REDS)
@@ -17,10 +17,10 @@ run-c: $(CRUNS)
 run-act: $(ACTRUNS)
 
 $(ELITE):
-	make -C $(ELITE_ROOT)/compiler
+	make -C $(ACTORA_ROOT)/compiler
 
 $(REDEMU):
-	make -C $(ELITE_ROOT)/emulator
+	make -C $(ACTORA_ROOT)/emulator
 
 %.act: %.erl $(ELITE)
 	$(ELITE) -b $< > $@

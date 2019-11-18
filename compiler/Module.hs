@@ -29,7 +29,7 @@ loadModule prefix modName = do
     -- Module search paths
     searchPaths :: IO [String]
     searchPaths = do
-      libDir <- lookupEnv "ELITE_ROOT"
+      libDir <- lookupEnv "ACTORA_ROOT"
       return ([prefix] ++ [dir ++ "/lib" | Just dir <- [libDir]])
 
     -- Determine module location

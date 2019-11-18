@@ -1,4 +1,4 @@
-BLARNEY_ROOT = $(ELITE_ROOT)/blarney
+BLARNEY_ROOT = $(ACTORA_ROOT)/blarney
 BLC = $(BLARNEY_ROOT)/Scripts/blc
 
 .PHONEY: all

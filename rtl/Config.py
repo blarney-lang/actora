@@ -37,4 +37,4 @@ if mode == "hw-cpp":
     print("#define " + var + " " + str(p[var]))
 elif mode == "cpp":
   for var in p:
-    print("#define Red" + var + " " + str(p[var]))
+    print("#define Act" + var + " " + str(p[var]))
