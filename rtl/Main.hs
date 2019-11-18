@@ -1,6 +1,7 @@
-import Blarney
-import Stack
 import Core
+import DRAM
+import Stack
+import Blarney
 
 main :: IO ()
 main = do

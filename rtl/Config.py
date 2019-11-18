@@ -5,6 +5,15 @@ import sys
 # Circuit-generator parameters
 p = {}
 
+# Command-line options
+if len(sys.argv) > 2:
+  if sys.argv[1] == "sim":
+    p["SimMode"] = 1
+  mode = sys.argv[2]
+else:
+  print "Usage: config.py <sim|syn> <hw-cpp|cpp>"
+  sys.exit(-1)
+
 # Instruction memory size (in instructions)
 p["LogInstrMemSize"] = 11
 
@@ -25,13 +34,18 @@ p["GCThreshold"] = (
     (2 ** p["LogHeapSizeMinusOne"]) - (2 ** (p["LogStackSize"]-1)) - 32
   )
 
-# Emit parameters in desired format
-if len(sys.argv) > 1:
-  mode = sys.argv[1]
+# DRAM parameters
+p["DRAMReqIdBits"] = 4
+p["DRAMBeatWidth"] = 9
+p["DRAMBurstWidth"] = 4
+p["DRAMSimLatency"] = 25
+p["DRAMLogMaxInFlight"] = 5
+if "SimMode" in p:
+  p["LogBeatsPerDRAM"] = 13
 else:
-  print "Usage: config.py <hw-cpp|cpp>"
-  sys.exit(-1)
+  p["LogBeatsPerDRAM"] = 23
 
+# Emit parameters in desired format
 if mode == "hw-cpp":
   for var in p:
     print("#define " + var + " " + str(p[var]))

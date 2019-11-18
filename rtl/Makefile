@@ -6,7 +6,7 @@ all: Config.h
 	$(BLC) Main.hs
 
 Config.h: Config.py
-	./Config.py hw-cpp > Config.h
+	./Config.py syn hw-cpp > Config.h
 
 clean:
 	rm -rf *.o *.hi Main *-Verilog Config.h
