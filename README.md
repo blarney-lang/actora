@@ -3,12 +3,11 @@
 Modern processors spend huge numbers of transistors on the
 identification of instruction-level parallelism and the provision of
 coherent shared memories.  But for applications conforming to the
-actor model, parallelism is abundant, blindingly explicit, and without
-shared state.
+actor model, parallelism explicit and without shared state.
 
 Actora is a processor designed to fit the actor model more directly,
-using a large number of very simple cores running code written in a
-small Erlang-like language called Elite.  The work is in the
+using a large number of simple (embedded) cores running code written
+in a small Erlang-like language called Elite.  The work is in the
 preliminary stages.  So far, we have:
 
   * [Elite](compiler/Syntax.hs),
@@ -54,7 +53,8 @@ collector must be *conservative* since pointers and integers cannot be
 distinguished in C.  This also means that the garbage collector cannot
 relocate objects, preventing the use of copying collectors, operating
 in O(survivors) time, that work well for functional languages.  The
-generated C code runs on both x86 and NIOS-II architectures.
+generated C code runs on both x86 and NIOS-II (small embedded RISC
+core).
 
 ## 2. Actora Core
 
@@ -121,11 +121,9 @@ These results were obtained on an `Intel(R) Core(TM) i7-6770HQ CPU @
 shows the proportion of time spent in the garbage collector
 for the Elite C backend, not HIPE.
 
-The results show that the Elite C backend is generally more efficient
-than HIPE.  It falls slightly short only in the heap-intensive
-benchmarks, were GC time (a known weakness) is significant.  It is
-possible that we could improve GC time by using LLVM as a target
-instead of C (allowing pointers and integers to be distinguished).
+The results show that the Elite C backend provides decent performance.
+It falls slightly short of HIPE only in the heap-intensive benchmarks,
+were GC time (a known weakness) is significant.
 
 ## 5. Elite C Backend versus Actora Core
 
@@ -141,20 +139,20 @@ Implementation | DE10-Pro Area (ALMs) | DE10-Pro FMax (MHz)
 NIOS-II        | 1154 (0.0012%)       | 345
 Elite core     | 1229 (0.0013%)       | 301     
 
-Despite the lower Fmax, the Actora Core offers a slight performance
+Despite the lower Fmax, the Actora Core offers a performance
 improvement (results for DE5-Net, both implementations use a 56KB
 heap):
 
-Benchmark | NIOS-II (s) | GC (%) | Elite core (s) | %GC    | Speedup
---------- | ----------: | -----: | -------------: | -----: | ------:
-fib       |   35.92     |      0 |  18.90         |     0  |  1.90
-adjoxo    |   11.42     |  41.70 |   3.99         |  2.35  |  2.86
-mss       |    7.81     |   1.97 |   4.73         |  0.23  |  1.65
-redblack  |   11.26     |  39.47 |   4.86         |  7.87  |  2.31
-while     |   12.12     |  42.65 |   3.30         |  2.31  |  3.67
-braun     |   11.97     |  55.40 |   2.92         | 15.10  |  4.10
-queens    |    7.89     |   3.80 |   6.09         |  0.10  |  1.30
-shiftsub  |    7.41     |      0 |   4.76         |     0  |  1.55
+Benchmark | NIOS-II (s) | GC (%) | Actora core (s) | %GC    | Speedup
+--------- | ----------: | -----: | -------------:  | -----: | ------:
+fib       |   35.92     |      0 |  18.90          |     0  |  1.90
+adjoxo    |   11.42     |  41.70 |   3.99          |  2.35  |  2.86
+mss       |    7.81     |   1.97 |   4.73          |  0.23  |  1.65
+redblack  |   11.26     |  39.47 |   4.86          |  7.87  |  2.31
+while     |   12.12     |  42.65 |   3.30          |  2.31  |  3.67
+braun     |   11.97     |  55.40 |   2.92          | 15.10  |  4.10
+queens    |    7.89     |   3.80 |   6.09          |  0.10  |  1.30
+shiftsub  |    7.41     |      0 |   4.76          |     0  |  1.55
 
 Again, the difference is most visible in the benchmarks where GC time
 is significant, which is a known weakness of the C backend (and
