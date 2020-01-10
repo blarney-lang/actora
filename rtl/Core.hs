@@ -2,7 +2,7 @@ module Core where
 
 -- Blarney imports
 import Blarney
-import Blarney.RAM
+import Blarney.Recipe
 import Blarney.Queue
 import Blarney.Stream
 
@@ -210,7 +210,7 @@ makeCore debugIn = do
         load heap (stk.top1.getObjectPtr)
         loadPtr <== stk.top1.getObjectPtr - 1
         loadCount <== stk.top1.getObjectLen.zeroExtend
-        loadOdd <== index @0 (stk.top1.getObjectLen)
+        loadOdd <== at @0 (stk.top1.getObjectLen)
         stall <== true
         when (instr.isLoadPop) do
           pop stk 1
@@ -262,10 +262,10 @@ makeCore debugIn = do
                       instr2.isAddOrSub .&. instr2.isAdd)
         let addSub = add1 + (doAdd ? (add2, add2.inv))
                    + (doAdd ? (0, 1))
-        let setUpper = instr.operand # range @15 @0 op1
+        let setUpper = instr.operand # slice @15 @0 op1
         -- Comparison result
         let eq = addSub .==. 0
-        let lt = index @32 addSub
+        let lt = at @32 addSub
         -- Overall result
         let result =
               if instr.isArith then 
@@ -303,9 +303,9 @@ makeCore debugIn = do
       when (instrReg.val.isSlide) do
         if slideCount.val .<=. 2
           then do
-            when (range @1 @0 (slideCount.val) .!=. 0) do
+            when (slice @1 @0 (slideCount.val) .!=. 0) do
               push1 stk (slide1.val)
-            when (index @1 (slideCount.val)) do
+            when (at @1 (slideCount.val)) do
               push2 stk (slide2.val)
           else do
             copy stk (slideOffset.val)
@@ -385,7 +385,7 @@ makeCore debugIn = do
         -- Result of left shift
         let leftResult = op1 .<<. amount
         -- Right-shift bit extension
-        let rext = instrReg.val.isArithShift ? (index @31 op1, 0);
+        let rext = instrReg.val.isArithShift ? (at @31 op1, 0);
         -- Result of right shift
         let rightResult = (rext # op1) .>>>. amount
         -- Result of shift
@@ -543,7 +543,7 @@ makeCore debugIn = do
             load heap (gcStackPtr.val)
             gcRestoreStack <== true
             loadCount <== gcStackSize.val
-            loadOdd <== index @0 (gcStackSize.val)
+            loadOdd <== at @0 (gcStackSize.val)
             loadPtr <== gcStackPtr.val - 1,
           Wait (gcRestoreStack.val .==. false),
 

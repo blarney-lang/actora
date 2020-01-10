@@ -3,7 +3,7 @@
 Modern processors spend huge numbers of transistors on the
 identification of instruction-level parallelism and the provision of
 coherent shared memories.  But for applications conforming to the
-actor model, parallelism explicit and without shared state.
+actor model, parallelism is explicit and without shared state.
 
 Actora is a processor designed to fit the actor model more directly,
 using a large number of simple (embedded) cores running code written

@@ -4,7 +4,7 @@ module Stack where
 
 import Util
 import Blarney
-import Blarney.RAM
+import Blarney.Recipe
 
 -- Interface
 -- =========
