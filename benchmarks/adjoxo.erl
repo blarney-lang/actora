@@ -52,7 +52,7 @@ moveval(AP, PP) ->
 adjudicate(Os, Xs) ->
   LenOs = length(Os),
   LenXs = length(Xs),
-  if LenOs < LenXs -> report(analysis(Xs, Os), o);
+  if LenOs < LenXs -> report(analysis(Os, Xs), o);
      LenOs > LenXs -> report(analysis(Xs, Os), x);
      hasLine(Xs) -> report(win, x);
      hasLine(Os) -> report(win, o);
